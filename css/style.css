@@ -1,0 +1,756 @@
+:root {
+  --bg: #15263d;
+  --bg-deep: #0b1626;
+  --ink: #eef3f8;
+  --muted: #a3b4c7;
+  --paper: #fffdf5;
+  --gold: #f6c955;
+  --tip: #9fe8ff;
+  --warn: #ffb4a3;
+  --panel: #182c46; /* boxes */
+  --on-fill: #111820; /* writing on a coloured tile */
+  /* The ten series. Light fills, so the dark symbols on them stay easy to
+     read even on a phone's smallest tiles. */
+  --alkali: #ff8a7a;
+  --alkaline: #ffb366;
+  --transition: #f2d36b;
+  --post: #b9c0c8;
+  --metalloid: #7fd8c0;
+  --nonmetal: #a8e07a;
+  --halogen: #74cdf2;
+  --noble: #a3b8ff;
+  --lanthanide: #f6a3cf;
+  --actinide: #d4a2f2;
+  /* Blocks */
+  --s: #ff9f80;
+  --p: #8fd6f5;
+  --d: #f2d36b;
+  --f: #c9a6f5;
+  /* At room temperature */
+  --solid: #e3d5b8;
+  --liquid: #6fc3f0;
+  --gas: #ffb0c4;
+  --unknown: #8a97a8;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html {
+  background: var(--bg-deep);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: radial-gradient(ellipse at 50% 0%, var(--bg), var(--bg-deep) 75%) fixed;
+  color: var(--ink);
+  font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+h1, h2, h3, p, figure, ol, ul, dl, dd { margin: 0; }
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid var(--tip);
+  outline-offset: 2px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 1280px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+}
+
+/* Top bar */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.brand {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font: 700 1.35rem Georgia, 'Times New Roman', serif;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.brand-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A little gold tile, like the HomePage card's. */
+.brand-tile {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding-top: 5px;
+  border-radius: 7px;
+  background: var(--gold);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+  color: #2b2205;
+  font-size: 1rem;
+}
+
+.brand-tile small {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font: 600 0.5rem system-ui, sans-serif;
+}
+
+/* Buttons */
+
+.btn {
+  min-height: 48px;
+  padding: 10px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 600;
+}
+
+.btn,
+.choice button { white-space: nowrap; }
+
+.btn.primary {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: #2b2205;
+}
+
+.btn.danger { color: var(--warn); }
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.row > * { flex: 1; }
+
+.icon-btn {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 1.2rem;
+}
+
+.icon-btn svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin: auto;
+  fill: currentColor;
+}
+
+.icon-btn svg .line {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.choice {
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.choice button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+}
+
+.choice button[aria-pressed='true'] {
+  background: var(--paper);
+  color: #17202b;
+  font-weight: 600;
+}
+
+/* The table screen */
+
+.explore {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.find {
+  flex: 1 1 110px;
+  min-width: 0;
+  max-width: 360px;
+  min-height: 46px;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  font: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.find::placeholder { color: var(--muted); }
+
+.board-wrap { min-width: 0; }
+
+/* The table. ui.js works out --cell (one tile's width) and --gap from the
+   room there is, and data-size from --cell: s shows symbols only, m adds the
+   atomic number, l the name and weight too. */
+.ptable {
+  --cell: 18px;
+  --gap: 1px;
+  display: grid;
+  grid-template-columns: repeat(18, var(--cell));
+  grid-template-rows: repeat(7, var(--cell)) calc(var(--cell) * 0.4) repeat(2, var(--cell));
+  justify-content: center;
+  gap: var(--gap);
+  /* A finger can slide across the table without scrolling the page, or
+     bringing up the phone's press-and-hold menu. */
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+[data-cat='alkali'] { --cat: var(--alkali); }
+[data-cat='alkaline'] { --cat: var(--alkaline); }
+[data-cat='transition'] { --cat: var(--transition); }
+[data-cat='post'] { --cat: var(--post); }
+[data-cat='metalloid'] { --cat: var(--metalloid); }
+[data-cat='nonmetal'] { --cat: var(--nonmetal); }
+[data-cat='halogen'] { --cat: var(--halogen); }
+[data-cat='noble'] { --cat: var(--noble); }
+[data-cat='lanthanide'] { --cat: var(--lanthanide); }
+[data-cat='actinide'] { --cat: var(--actinide); }
+[data-block='s'] { --blk: var(--s); }
+[data-block='p'] { --blk: var(--p); }
+[data-block='d'] { --blk: var(--d); }
+[data-block='f'] { --blk: var(--f); }
+[data-state='solid'] { --st: var(--solid); }
+[data-state='liquid'] { --st: var(--liquid); }
+[data-state='gas'] { --st: var(--gas); }
+[data-state='unknown'] { --st: var(--unknown); }
+
+.ptable[data-color='category'] .cell { --fill: var(--cat); }
+.ptable[data-color='block'] .cell { --fill: var(--blk); }
+.ptable[data-color='state'] .cell { --fill: var(--st); }
+.ptable[data-color='state'] .cell.ref { --fill: rgba(255, 255, 255, 0.14); color: var(--muted); }
+
+.cell {
+  position: relative;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: calc(var(--cell) * 0.14);
+  background: var(--fill);
+  color: var(--on-fill);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.cell .sym {
+  font-size: calc(var(--cell) * 0.52);
+  font-weight: 700;
+}
+
+.cell .num,
+.cell .name,
+.cell .mass { display: none; }
+
+.ptable[data-size='m'] .cell .sym {
+  margin-top: calc(var(--cell) * 0.14);
+  font-size: calc(var(--cell) * 0.44);
+}
+
+.ptable[data-size='m'] .cell .num,
+.ptable[data-size='l'] .cell .num {
+  position: absolute;
+  top: calc(var(--cell) * 0.07);
+  left: calc(var(--cell) * 0.09);
+  display: block;
+  font-size: calc(var(--cell) * 0.22);
+  font-weight: 600;
+}
+
+.ptable[data-size='l'] .cell {
+  place-content: end center;
+  padding-bottom: calc(var(--cell) * 0.08);
+}
+
+.ptable[data-size='l'] .cell .sym { font-size: calc(var(--cell) * 0.36); }
+
+.ptable[data-size='l'] .cell .name,
+.ptable[data-size='l'] .cell .mass {
+  display: block;
+  max-width: calc(var(--cell) - 4px);
+  margin-top: calc(var(--cell) * 0.04);
+  overflow: hidden;
+  font-size: calc(var(--cell) * 0.15);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ptable[data-size='l'] .cell[data-long] .name {
+  font-size: calc(var(--cell) * 0.13);
+  letter-spacing: -0.02em;
+}
+
+.ptable[data-size='l'] .cell .mass { opacity: 0.8; }
+
+/* The two pointers down to the f-block rows. */
+.cell.ref .sym {
+  font-size: calc(var(--cell) * 0.27);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.ptable[data-size='m'] .cell.ref .sym,
+.ptable[data-size='l'] .cell.ref .sym { margin: 0; font-size: calc(var(--cell) * 0.24); }
+
+/* Too small to read on a phone's tiles: the colour alone points the way. */
+.ptable[data-size='s'] .cell.ref .sym { display: none; }
+
+/* Picked out by the key or by Find: everything else fades. */
+.ptable.picking .cell:not(.lit) { opacity: 0.2; }
+
+/* The element under a finger or the mouse, or reached by the arrow keys. */
+.cell.at {
+  z-index: 1;
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  transform: scale(1.1);
+}
+
+/* The element whose details were last opened. */
+.cell.current { box-shadow: 0 0 0 2px var(--gold); }
+
+.cell:focus-visible { z-index: 2; }
+
+/* The empty corner over groups 3 to 12 shows the element being pointed at. */
+.preview {
+  display: flex;
+  grid-row: 1 / span 3;
+  grid-column: 3 / span 10;
+  align-items: center;
+  gap: calc(var(--cell) * 0.3);
+  min-width: 0;
+  padding: 0 calc(var(--cell) * 0.2);
+  pointer-events: none;
+}
+
+.explore[data-layout='wide'] .preview { grid-column: 3 / span 5; }
+
+.preview .tile {
+  --size: calc(var(--cell) * 2.8);
+  flex: none;
+}
+
+/* Beside the key there is less room across. */
+.explore[data-layout='wide'] .preview .tile { --size: calc(var(--cell) * 2.1); }
+
+.preview-text {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  font-size: max(11px, calc(var(--cell) * 0.24));
+  line-height: 1.15;
+}
+
+.preview-text b {
+  overflow: hidden;
+  font-size: max(14px, calc(var(--cell) * 0.3));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-text span { color: var(--muted); }
+
+.preview-hint {
+  color: var(--muted);
+  font-size: max(11px, calc(var(--cell) * 0.24));
+  line-height: 1.25;
+}
+
+/* An element tile, for the preview and the details box: number, symbol and
+   weight on its series' colour. */
+.tile {
+  --size: 64px;
+  position: relative;
+  display: grid;
+  flex: none;
+  place-content: center;
+  justify-items: center;
+  width: var(--size);
+  height: var(--size);
+  border-radius: calc(var(--size) * 0.14);
+  background: var(--cat);
+  box-shadow: inset 0 calc(var(--size) * -0.04) 0 rgba(0, 0, 0, 0.16);
+  color: var(--on-fill);
+  line-height: 1;
+}
+
+.tile .num {
+  position: absolute;
+  top: calc(var(--size) * 0.08);
+  left: calc(var(--size) * 0.1);
+  font-size: calc(var(--size) * 0.2);
+  font-weight: 600;
+}
+
+.tile .sym {
+  margin-top: calc(var(--size) * 0.1);
+  font-size: calc(var(--size) * 0.44);
+  font-weight: 700;
+}
+
+.tile .mass {
+  margin-top: calc(var(--size) * 0.06);
+  font-size: calc(var(--size) * 0.14);
+}
+
+/* The key */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 4px 12px 4px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.chip i {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--fill);
+}
+
+.chip[aria-pressed='true'] {
+  border-color: var(--paper);
+  background: var(--paper);
+  color: #17202b;
+  font-weight: 600;
+}
+
+/* "Alkaline earth metals" in full, or "Alkaline earth" where room is short. */
+.chip .short { display: none; }
+
+.explore[data-layout='side'] .chip .long,
+.legend.in-grid .chip .long { display: none; }
+
+.explore[data-layout='side'] .chip .short,
+.legend.in-grid .chip .short { display: inline; }
+
+/* Wide screens: the key sits in the empty corner, beside the preview. */
+.legend.in-grid {
+  display: grid;
+  grid-row: 1 / span 3;
+  grid-column: 8 / span 5;
+  grid-template-columns: 1fr 1fr;
+  align-content: center;
+  gap: calc(var(--cell) * 0.06) calc(var(--cell) * 0.12);
+  padding: 0 calc(var(--cell) * 0.1);
+}
+
+.legend.in-grid .chip {
+  min-height: 0;
+  padding: calc(var(--cell) * 0.04) calc(var(--cell) * 0.14) calc(var(--cell) * 0.04) calc(var(--cell) * 0.07);
+  font-size: max(11px, calc(var(--cell) * 0.2));
+}
+
+.legend.in-grid .chip i {
+  width: calc(var(--cell) * 0.22);
+  height: calc(var(--cell) * 0.22);
+}
+
+.hint { min-height: 1.2em; }
+
+/* A phone on its side: the table down the left, the controls and key beside it. */
+.explore[data-layout='side'] {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'board tools' 'board legend' 'board hint';
+  grid-template-rows: auto auto 1fr;
+  align-items: start;
+  column-gap: 12px;
+}
+
+.explore[data-layout='side'] .board-wrap { grid-area: board; }
+.explore[data-layout='side'] .toolbar { grid-area: tools; }
+.explore[data-layout='side'] .legend {
+  grid-area: legend;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+}
+.explore[data-layout='side'] .hint { grid-area: hint; }
+
+.explore[data-layout='side'] .toolbar .choice { width: 100%; }
+.explore[data-layout='side'] .toolbar .choice button { flex: 1; min-height: 34px; padding: 4px 6px; font-size: 0.85rem; }
+.explore[data-layout='side'] .find { flex-basis: 100%; min-height: 36px; }
+
+.explore[data-layout='side'] .chip {
+  min-width: 0;
+  min-height: 26px;
+  padding: 1px 6px 1px 5px;
+  font-size: 0.72rem;
+}
+
+.explore[data-layout='side'] .chip i {
+  width: 12px;
+  height: 12px;
+}
+
+@media (max-width: 359px) {
+  .choice button { padding-inline: 10px; }
+  .chip { min-height: 30px; padding-inline: 5px 9px; font-size: 0.78rem; }
+}
+
+/* Overlays */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  background: rgba(3, 9, 18, 0.8);
+}
+
+.dialog {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 380px);
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.dialog.wide {
+  width: min(100%, 520px);
+  text-align: left;
+}
+
+.dialog h2 { font-size: 1.4rem; }
+.dialog a { color: var(--tip); }
+
+.dialog h3 {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.facts dt { color: var(--muted); }
+
+.facts dd {
+  font-weight: 600;
+  text-align: right;
+}
+
+/* An element's details: a sheet over the whole screen on a phone, a box on
+   anything bigger. */
+.details {
+  width: min(100%, 560px);
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  gap: 0;
+  padding: 0;
+  text-align: left;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Focused when it opens, for screen readers and the arrow keys; no ring. */
+.details:focus { outline: none; }
+
+.details-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 18px 6px;
+}
+
+.details-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.details-title h2 {
+  font: 700 1.6rem Georgia, 'Times New Roman', serif;
+  overflow-wrap: anywhere;
+}
+
+.details-title p { color: var(--muted); }
+
+.details-body {
+  display: grid;
+  gap: 18px;
+  padding: 12px 18px 18px;
+}
+
+.details-body section {
+  display: grid;
+  gap: 8px;
+}
+
+.details-body p { line-height: 1.45; }
+
+.details-body sup { font-size: 0.7em; line-height: 0; }
+
+.atom {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.bohr {
+  display: block;
+  width: min(210px, 62vw);
+  height: auto;
+}
+
+.bohr .ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.3);
+}
+
+.bohr .electron { fill: var(--ink); }
+.bohr .nucleus { fill: var(--cat); }
+
+.bohr text {
+  fill: var(--on-fill);
+  font: 700 12px system-ui, sans-serif;
+}
+
+.details-nav {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 10px 18px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--panel);
+}
+
+.details-nav .btn {
+  flex: 1;
+  min-height: 44px;
+  padding-inline: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.details-nav .btn:last-child { text-align: right; }
+
+@media (max-width: 600px), (max-height: 520px) {
+  .overlay.sheet {
+    place-items: stretch;
+    padding: 0;
+  }
+
+  /* The overlay scrolls, not the box, so the Previous / Next bar stays at
+     the bottom of the screen. The box stretches to fill the screen when it
+     is short, and grows with what it holds when it is long: a percentage
+     min-height here would stop it growing past the screen. */
+  .overlay.sheet .details {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .overlay.sheet .details-top { padding-top: max(16px, env(safe-area-inset-top)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

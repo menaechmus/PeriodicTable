@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Periodic Table tests</title>
+<style>
+  body { font: 14px/1.5 ui-monospace, Consolas, monospace; margin: 1rem; background: #111; color: #ddd; }
+  .fail { color: #ff7a7a; }
+  .pass { color: #8fd694; }
+</style>
+</head>
+<body>
+<h1 id="summary">Running…</h1>
+<pre id="out"></pre>
+<script type="module">
+import { ELEMENTS } from './js/elements.js';
+import {
+  CATEGORIES, PLACEHOLDERS, PREVIEW_AREA, placeOf, neighbour, shellsOf, findElements, temperature, density,
+  configHtml, hasStandardWeight, byNumber, minus, yearText, stateOf,
+} from './js/table.js';
+
+const results = [];
+const notes = [];
+
+// tests.html?only=data runs just the tests with that word before the colon.
+const only = new URLSearchParams(location.search).get('only');
+const wanted = name => !only || name.startsWith(`${only}:`);
+
+function test(name, body) {
+  if (!wanted(name)) return;
+  try {
+    body();
+    results.push({ name, ok: true });
+  } catch (error) {
+    results.push({ name, ok: false, error: error.message });
+  }
+}
+
+async function testAsync(name, body) {
+  if (!wanted(name)) return;
+  try {
+    await body();
+    results.push({ name, ok: true });
+  } catch (error) {
+    results.push({ name, ok: false, error: error.message });
+  }
+}
+
+function equal(actual, expected, label = 'value') {
+  const a = JSON.stringify(actual);
+  const e = JSON.stringify(expected);
+  if (a !== e) throw new Error(`${label}: expected ${e}, got ${a}`);
+}
+
+function throws(body, label) {
+  try {
+    body();
+  } catch {
+    return;
+  }
+  throw new Error(`${label}: expected an error`);
+}
+
+const symbols = list => list.map(element => element.sym);
+
+// ---- The data -----------------------------------------------------------------
+
+test('data: 118 elements, numbered 1 to 118', () => {
+  equal(ELEMENTS.length, 118, 'count');
+  ELEMENTS.forEach((element, i) => equal(element.z, i + 1, element.sym));
+});
+
+test('data: symbols and names are all different', () => {
+  equal(new Set(ELEMENTS.map(element => element.sym.toLowerCase())).size, 118, 'symbols');
+  equal(new Set(ELEMENTS.map(element => element.name.toLowerCase())).size, 118, 'names');
+});
+
+test('data: a symbol is a capital and at most one small letter', () => {
+  equal(symbols(ELEMENTS.filter(element => !/^[A-Z][a-z]?$/.test(element.sym))), []);
+});
+
+test('data: every series is one of the ten', () => {
+  const keys = new Set(CATEGORIES.map(category => category.key));
+  equal(symbols(ELEMENTS.filter(element => !keys.has(element.cat))), []);
+});
+
+test('data: series agree with the columns and rows', () => {
+  for (const element of ELEMENTS) {
+    const { group, row } = placeOf(element.z);
+    const label = `${element.sym} (${element.cat})`;
+    if (group === 1 && element.z !== 1) equal(element.cat, 'alkali', label);
+    if (group === 2) equal(element.cat, 'alkaline', label);
+    if (group >= 3 && group <= 12) equal(element.cat, 'transition', label);
+    if (group === 17) equal(element.cat, 'halogen', label);
+    if (group === 18) equal(element.cat, 'noble', label);
+    if (row === 9) equal(element.cat, 'lanthanide', label);
+    if (row === 10) equal(element.cat, 'actinide', label);
+  }
+  equal(symbols(ELEMENTS.filter(element => element.cat === 'metalloid')), ['B', 'Si', 'Ge', 'As', 'Sb', 'Te', 'Po'], 'metalloids');
+  equal(symbols(ELEMENTS.filter(element => element.cat === 'nonmetal')), ['H', 'C', 'N', 'O', 'P', 'S', 'Se'], 'nonmetals');
+});
+
+test('data: the shells hold as many electrons as the atomic number', () => {
+  equal(symbols(ELEMENTS.filter(element => shellsOf(element.config).reduce((a, b) => a + b, 0) !== element.z)), []);
+});
+
+test('data: configurations written shell by shell', () => {
+  const order = 'spdf';
+  for (const element of ELEMENTS) {
+    const parts = element.config.replace(/^\[\w+\]/, '').split(' ').filter(Boolean);
+    const keys = parts.map(part => Number(part[0]) * 10 + order.indexOf(part[1]));
+    equal(keys, [...keys].sort((a, b) => a - b), element.sym);
+  }
+});
+
+test('data: 84 standard weights; mass numbers for Tc, Pm and from Po, except Th, Pa and U', () => {
+  const bracketed = ELEMENTS.filter(element => !hasStandardWeight(element)).map(element => element.z);
+  const want = [43, 61, ...Array.from({ length: 35 }, (_, i) => 84 + i).filter(z => z < 90 || z > 92)];
+  equal(bracketed, want);
+  equal(ELEMENTS.filter(hasStandardWeight).length, 84, 'standard');
+});
+
+test('data: weights rise with the atomic number, apart from the known pairs', () => {
+  const value = element => Number(element.mass.replace(/[[\]]/g, ''));
+  const drops = [];
+  for (let z = 2; z <= 118; z++) {
+    if (value(byNumber(z)) < value(byNumber(z - 1))) drops.push(`${byNumber(z - 1).sym}/${byNumber(z).sym}`);
+  }
+  equal(drops, ['Ar/K', 'Co/Ni', 'Te/I', 'Th/Pa', 'U/Np', 'Pu/Am', 'Bh/Hs']);
+});
+
+test('data: some familiar weights', () => {
+  const mass = sym => ELEMENTS.find(element => element.sym === sym).mass;
+  equal(['H', 'C', 'O', 'Na', 'Cl', 'Fe', 'Cu', 'Au', 'Pb', 'U'].map(mass),
+    ['1.008', '12.011', '15.999', '22.990', '35.45', '55.845', '63.546', '196.97', '207.2', '238.03']);
+});
+
+test('data: the eleven symbols that don\'t match their names say where they come from', () => {
+  equal(symbols(ELEMENTS.filter(element => element.root)), ['Na', 'K', 'Fe', 'Cu', 'Ag', 'Sn', 'Sb', 'W', 'Au', 'Hg', 'Pb']);
+});
+
+test('data: every element has a name origin and a fact, each a sentence', () => {
+  equal(symbols(ELEMENTS.filter(element => !/^[A-Z].{10,}\.$/.test(element.origin) || !/^[A-Z].{10,}\.$/.test(element.fact))), []);
+});
+
+test('data: other spellings', () => {
+  equal(ELEMENTS.filter(element => element.also.length).map(element => [element.name, ...element.also]),
+    [['Aluminum', 'Aluminium'], ['Sulfur', 'Sulphur'], ['Cesium', 'Caesium']]);
+});
+
+test('data: liquids, gases, and states only expected', () => {
+  equal(symbols(ELEMENTS.filter(element => element.state === 'liquid')), ['Br', 'Hg'], 'liquids');
+  equal(symbols(ELEMENTS.filter(element => element.state === 'gas' && !element.expected)),
+    ['H', 'He', 'N', 'O', 'F', 'Ne', 'Cl', 'Ar', 'Kr', 'Xe', 'Rn'], 'gases');
+  equal(ELEMENTS.filter(element => element.expected).map(element => element.z), [110, 111, 112, 113, 114, 115, 116, 117, 118], 'expected');
+  equal(stateOf(byNumber(118)), 'unknown', 'Og');
+});
+
+// ---- The table ------------------------------------------------------------------
+
+test('table: places', () => {
+  equal(placeOf(1), { period: 1, group: 1, row: 1, column: 1, block: 's' }, 'H');
+  equal(placeOf(2), { period: 1, group: 18, row: 1, column: 18, block: 's' }, 'He');
+  equal(placeOf(5), { period: 2, group: 13, row: 2, column: 13, block: 'p' }, 'B');
+  equal(placeOf(26), { period: 4, group: 8, row: 4, column: 8, block: 'd' }, 'Fe');
+  equal(placeOf(56), { period: 6, group: 2, row: 6, column: 2, block: 's' }, 'Ba');
+  equal(placeOf(57), { period: 6, group: null, row: 9, column: 3, block: 'f' }, 'La');
+  equal(placeOf(71), { period: 6, group: null, row: 9, column: 17, block: 'f' }, 'Lu');
+  equal(placeOf(72), { period: 6, group: 4, row: 6, column: 4, block: 'd' }, 'Hf');
+  equal(placeOf(89), { period: 7, group: null, row: 10, column: 3, block: 'f' }, 'Ac');
+  equal(placeOf(103), { period: 7, group: null, row: 10, column: 17, block: 'f' }, 'Lr');
+  equal(placeOf(118), { period: 7, group: 18, row: 7, column: 18, block: 'p' }, 'Og');
+});
+
+test('table: every spot used once, and the pointer tiles and preview corner left free', () => {
+  const spots = new Set();
+  for (const element of ELEMENTS) {
+    const { row, column } = placeOf(element.z);
+    const key = `${row},${column}`;
+    if (spots.has(key)) throw new Error(`${element.sym} on a taken spot`);
+    spots.add(key);
+  }
+  for (const spot of PLACEHOLDERS) equal(spots.has(`${spot.row},${spot.column}`), false, spot.label);
+  for (let row = PREVIEW_AREA.row; row < PREVIEW_AREA.row + PREVIEW_AREA.rows; row++) {
+    for (let column = PREVIEW_AREA.column; column < PREVIEW_AREA.column + PREVIEW_AREA.columns; column++) {
+      equal(spots.has(`${row},${column}`), false, `preview ${row},${column}`);
+    }
+  }
+});
+
+test('table: periods of 2, 8, 8, 18, 18, 32 and 32', () => {
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+  for (const element of ELEMENTS) counts[placeOf(element.z).period - 1]++;
+  equal(counts, [2, 8, 8, 18, 18, 32, 32]);
+});
+
+test('table: blocks', () => {
+  const count = block => ELEMENTS.filter(element => placeOf(element.z).block === block).length;
+  equal([count('s'), count('p'), count('d'), count('f')], [14, 36, 38, 30]);
+});
+
+test('table: the arrow keys\' neighbours', () => {
+  equal(neighbour(1, 0, 1), 2, 'H →');
+  equal(neighbour(2, 1, 0), 10, 'He ↓');
+  equal(neighbour(4, 0, 1), 5, 'Be → over the gap');
+  equal(neighbour(30, -1, 0), 30, 'Zn ↑ nothing');
+  equal(neighbour(39, 1, 0), 57, 'Y ↓ over the pointers');
+  equal(neighbour(57, -1, 0), 39, 'La ↑');
+  equal(neighbour(57, 0, -1), 57, 'La ← nothing');
+  equal(neighbour(71, 0, 1), 71, 'Lu → nothing');
+  equal(neighbour(112, 1, 0), 66, 'Cn ↓ Dy');
+  equal(neighbour(118, 0, 1), 118, 'Og → nothing');
+});
+
+test('table: shells', () => {
+  equal(shellsOf('1s1'), [1], 'H');
+  equal(shellsOf('[Ar]3d6 4s2'), [2, 8, 14, 2], 'Fe');
+  equal(shellsOf('[Xe]4f14 5d10 6s1'), [2, 8, 18, 32, 18, 1], 'Au');
+  equal(shellsOf(byNumber(118).config), [2, 8, 18, 32, 32, 18, 8], 'Og');
+});
+
+test('table: temperatures in °C and K', () => {
+  equal(temperature(1811), '1538 °C (1811 K)', 'Fe');
+  equal(temperature(13.81), '−259.34 °C (13.81 K)', 'H');
+  equal(temperature(887, 'sublimes'), '614 °C (887 K), sublimes', 'As');
+  equal(temperature(null), null, 'none');
+});
+
+test('table: densities, gases per litre', () => {
+  equal(density(byNumber(1)), '0.0899 g/L', 'H');
+  equal(density(byNumber(26)), '7.874 g/cm³', 'Fe');
+  equal(density(byNumber(80)), '13.53 g/cm³', 'Hg');
+  equal(density(byNumber(118)), null, 'Og');
+});
+
+test('table: writing', () => {
+  equal(configHtml('[Ar]3d6 4s2'), '[Ar]3d<sup>6</sup> 4s<sup>2</sup>', 'configuration');
+  equal(minus('+1, -1'), '+1, −1', 'minus');
+  equal([yearText(0), yearText(1766)], ['Ancient times', '1766'], 'years');
+});
+
+// ---- Find -----------------------------------------------------------------------
+
+test('find: a symbol first, then names that start the same', () => {
+  equal(findElements('fe'), [26, 100], 'fe: iron, then fermium');
+  equal(findElements('ca'), [20, 6, 48, 55, 98], 'ca');
+  equal(findElements('  Ne '), [10, 60, 93], 'ne');
+  equal(findElements('IRON'), [26], 'iron');
+});
+
+test('find: other spellings and numbers', () => {
+  equal(findElements('caes'), [55], 'caesium');
+  equal(findElements('sulph'), [16], 'sulphur');
+  equal(findElements('79'), [79], '79');
+  equal([findElements('0'), findElements('119'), findElements('xyz'), findElements('')], [[], [], [], []], 'none');
+});
+
+const failed = results.filter(result => !result.ok);
+const out = document.getElementById('out');
+for (const result of results) {
+  const line = document.createElement('div');
+  line.className = result.ok ? 'pass' : 'fail';
+  line.textContent = `${result.ok ? 'ok  ' : 'FAIL'} ${result.name}${result.ok ? '' : `\n     ${result.error}`}`;
+  out.append(line);
+}
+for (const note of notes) out.append(`\n${note}`);
+const summary = `${failed.length ? 'FAILED' : 'PASSED'} ${results.length - failed.length}/${results.length}`;
+document.getElementById('summary').textContent = summary;
+document.title = summary;
+</script>
+<script>
+  // A module that fails to load never reaches the report above.
+  addEventListener('error', event => {
+    document.title = 'FAILED to run';
+    document.getElementById('summary').textContent = `FAILED to run: ${event.message}`;
+  });
+  addEventListener('unhandledrejection', event => {
+    document.title = 'FAILED to run';
+    document.getElementById('summary').textContent = `FAILED to run: ${event.reason?.message ?? event.reason}`;
+  });
+</script>
+</body>
+</html>

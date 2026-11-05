@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1626">
+<meta name="description" content="An interactive periodic table: tap any element, or slide a finger across the table, to see each element's details.">
+<title>Periodic Table</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23f6c955%22/><text x=%2250%22 y=%2268%22 text-anchor=%22middle%22 font-family=%22Georgia,serif%22 font-size=%2252%22 font-weight=%22700%22 fill=%22%232b2205%22>Au</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+  <header id="topbar" class="topbar">
+    <h1 class="brand"><span class="brand-tile" aria-hidden="true"><small>79</small>Au</span><span class="brand-text">Periodic Table</span></h1>
+    <button id="btn-about" class="icon-btn" aria-label="About">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle class="line" cx="12" cy="12" r="9"/>
+        <path class="line" d="M12 11v6"/>
+        <circle cx="12" cy="7.5" r="1.3"/>
+      </svg>
+    </button>
+  </header>
+
+  <main id="explore" class="screen explore" data-layout="stack">
+    <div id="toolbar" class="toolbar">
+      <div class="choice" data-setting="color" role="group" aria-label="Color by">
+        <button data-value="category">Series</button>
+        <button data-value="block">Block</button>
+        <button data-value="state">State</button>
+      </div>
+      <input id="find" class="find" type="search" placeholder="Find" aria-label="Find an element by name, symbol or number" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    </div>
+    <div id="board-wrap" class="board-wrap">
+      <div id="ptable" class="ptable" data-color="category" data-size="s"></div>
+    </div>
+    <div id="legend" class="legend" role="group" aria-label="Key: tap one to pick out those elements"></div>
+    <p id="hint" class="hint muted" role="status" aria-live="polite"></p>
+  </main>
+</div>
+
+<div id="details" class="overlay sheet" hidden>
+  <div class="dialog details" role="dialog" aria-modal="true" aria-labelledby="details-name" tabindex="-1">
+    <header class="details-top">
+      <div id="details-tile" class="tile big"></div>
+      <div class="details-title">
+        <h2 id="details-name"></h2>
+        <p id="details-cat"></p>
+      </div>
+      <button class="icon-btn" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path class="line" d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+    <div id="details-body" class="details-body"></div>
+    <footer class="details-nav">
+      <button id="btn-prev" class="btn"></button>
+      <button id="btn-next" class="btn"></button>
+    </footer>
+  </div>
+</div>
+
+<div id="about" class="overlay" hidden>
+  <div class="dialog">
+    <h2>Periodic Table</h2>
+    <p id="about-version"></p>
+    <p class="muted">If this is older than you expect, refresh the page. Browsers can hold on to the previous version for a few minutes after an update.</p>
+    <p class="muted">Element data: <a href="https://pubchem.ncbi.nlm.nih.gov/ptable/" target="_blank" rel="noopener">PubChem</a>, National Library of Medicine. The series follow PubChem's grouping; atomic weights are IUPAC's standard values, as school tables print them.</p>
+    <p><a href="https://github.com/menaechmus/PeriodicTable" target="_blank" rel="noopener">Source on GitHub</a></p>
+    <button class="btn primary" data-close>Close</button>
+  </div>
+</div>
+
+<script type="module" src="js/ui.js"></script>
+</body>
+</html>
