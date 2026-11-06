@@ -35,6 +35,7 @@
   --new: #8a97a8;
   --learning: #ffb366;
   --almost: #e3e36b;
+  --due: #7cc4ff; /* mastered, and due for review */
   --mastered: #6fd08c;
   --right: #9fe39b;
 }
@@ -183,6 +184,27 @@ button {
 
 .btn.danger { color: var(--warn); }
 
+.btn.review {
+  border-color: var(--due);
+  color: var(--due);
+}
+
+/* How many reviews are due: on the Quiz tab, and on each quiz's button. */
+.due-count {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--due);
+  color: var(--on-fill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.55;
+  text-align: center;
+  vertical-align: 1px;
+}
+
 .btn:disabled {
   opacity: 0.45;
   cursor: default;
@@ -315,6 +337,7 @@ button {
 [data-level='new'] { --lvl: var(--new); }
 [data-level='learning'] { --lvl: var(--learning); }
 [data-level='almost'] { --lvl: var(--almost); }
+[data-level='due'] { --lvl: var(--due); }
 [data-level='mastered'] { --lvl: var(--mastered); }
 
 .ptable[data-color='category'] .cell { --fill: var(--cat); }
@@ -675,7 +698,16 @@ button {
   gap: 6px;
 }
 
-/* Mastered, almost, learning and new, side by side. */
+/* On a short screen the setup closes up, so that a Review button still shows
+   under Start on the smallest phones. */
+@media (max-height: 600px) {
+  .quiz-setup { gap: 10px; }
+  .option.stacked { gap: 4px; }
+  .quiz-setup .choice button { min-height: 36px; }
+  .quiz-setup .btn { min-height: 44px; padding-block: 8px; }
+}
+
+/* Mastered, due, almost, learning and new, side by side. */
 .bar {
   display: flex;
   height: 12px;

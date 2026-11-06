@@ -11,9 +11,12 @@ import {
   shellsOf, stateOf, temperature, density, yearText, configHtml, minus, findElements, shortMass,
 } from './table.js';
 import { checkAnswer } from './answers.js';
-import { LEVELS, emptyProgress, loadProgress, record, levelOf, recordOf, summarize, allMastered, addRound } from './progress.js';
 import {
-  SETS, QUIZ_KINDS, poolOf, newRound, nextQuestion, answerQuestion, roundOver, scoreOf, seeded, shuffled,
+  LEVELS, emptyProgress, loadProgress, record, levelOf, recordOf, isMastered, summarize, allMastered, addRound,
+  nextDue, dayOf, dayText,
+} from './progress.js';
+import {
+  SETS, REVIEW_MOST, QUIZ_KINDS, poolOf, dueIn, newRound, nextQuestion, answerQuestion, roundOver, scoreOf, seeded, shuffled,
   choiceQuestion, withArticle,
 } from './quiz.js';
 import { playSound, setMuted, unlockSound } from './sound.js';
@@ -21,7 +24,7 @@ import { startParty } from './celebrate.js';
 
 // Shown in the About box. Bump both with every release: a browser still
 // running a cached copy of this file then shows the old number.
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const RELEASED = '5 November 2026';
 
 const SETTINGS_KEY = 'periodic.settings';
@@ -83,9 +86,16 @@ function loadSettings() {
   return settings;
 }
 
+// Today, as the day number reviews are counted in.
+const today = () => dayOf(Date.now());
+
 const settings = loadSettings();
-const progress = loadProgress(load(PROGRESS_KEY));
+const savedProgress = load(PROGRESS_KEY);
+const progress = loadProgress(savedProgress, today());
 const saveProgress = () => store(PROGRESS_KEY, progress);
+// A save from before reviews is written again with the review days it has
+// just been given, so they don't move on each day the page is opened.
+if (savedProgress?.v === 1) saveProgress();
 const touchFirst = matchMedia('(pointer: coarse)').matches;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const table = $('ptable');
@@ -123,8 +133,10 @@ const KEYS = {
 const mode = () => table.dataset.color;
 
 const setLabel = size => (size >= ELEMENTS.length ? 'All 118' : `1–${size}`);
+// "5 mastered, 2 due, 1 almost, 3 learning, 9 new", leaving out due when none are.
 const countsText = counts =>
-  `${counts.mastered} mastered, ${counts.almost} almost, ${counts.learning} learning, ${counts.new} new`;
+  [`${counts.mastered} mastered`, counts.due ? `${counts.due} due` : '', `${counts.almost} almost`,
+    `${counts.learning} learning`, `${counts.new} new`].filter(Boolean).join(', ');
 
 // ---- The table ------------------------------------------------------------
 
@@ -321,7 +333,7 @@ function renderHint() {
     const count = ELEMENTS.filter(element => cellFor(element.z).dataset[attr] === picked).length;
     hint = `${list.find(item => item.key === picked).plural}: ${count} element${count === 1 ? '' : 's'}.`;
   } else if (view === 'progress') {
-    hint = `${QUIZ_KINDS[settings.shows].label}: ${countsText(summarize(progress, settings.shows, poolOf(settings.shows, ELEMENTS.length)))}.`;
+    hint = `${QUIZ_KINDS[settings.shows].label}: ${countsText(summarize(progress, settings.shows, poolOf(settings.shows, ELEMENTS.length), today()))}.`;
   }
   $('hint').textContent = hint;
 }
@@ -413,15 +425,18 @@ function bohrSvg(element, shells) {
   return parts.join('');
 }
 
-// Your record with this element, in each quiz that asks about it.
+// Your record with this element, in each quiz that asks about it, and when a
+// mastered one comes up for review.
 function yoursHtml(element) {
+  const day = today();
   return facts(Object.keys(QUIZ_KINDS)
     .filter(quiz => poolOf(quiz, ELEMENTS.length).includes(element.z))
     .map(quiz => {
-      const mine = recordOf(progress, quiz, element.z);
+      const mine = recordOf(progress, quiz, element.z, day);
       const answered = mine.right + mine.slips + mine.wrong;
       const level = LEVELS.find(item => item.key === mine.level).label;
-      return [QUIZ_KINDS[quiz].label, answered ? `${level} · ${mine.right + mine.slips} of ${answered} right` : 'Not asked yet'];
+      const review = mine.level === 'mastered' ? ` · next review ${dayText(mine.due, day)}` : '';
+      return [QUIZ_KINDS[quiz].label, answered ? `${level} · ${mine.right + mine.slips} of ${answered} right${review}` : 'Not asked yet'];
     }));
 }
 
@@ -559,29 +574,69 @@ function setPhase(next) {
 }
 
 function masteryBar(counts, total) {
-  const parts = ['mastered', 'almost', 'learning', 'new']
+  const parts = ['mastered', 'due', 'almost', 'learning', 'new']
     .map(key => `<i style="--fill: var(--${key}); width: ${((100 * counts[key]) / total).toFixed(2)}%"></i>`);
   return `<div class="bar" role="img" aria-label="${countsText(counts)}">${parts.join('')}</div>`;
 }
 
+// The set chosen, how well it's known, and the reviews due in the quiz
+// chosen (from the whole table), or the day the next one is.
 function renderSetup() {
+  const day = today();
   const pool = poolOf(settings.quiz, settings.set);
-  const counts = summarize(progress, settings.quiz, pool);
+  const counts = summarize(progress, settings.quiz, pool, day);
   $('setup-mastery').innerHTML = masteryBar(counts, pool.length) +
     `<p class="muted">${setLabel(settings.set)}: ${countsText(counts)}</p>`;
+  const due = dueIn(progress, settings.quiz, day).length;
+  const next = nextDue(progress, settings.quiz, day);
+  $('btn-review').hidden = !due;
+  $('btn-review').textContent = due > REVIEW_MOST ? `Review ${REVIEW_MOST} of ${due} due` : `Review ${due} due`;
+  $('setup-next').hidden = Boolean(due) || !next;
+  $('setup-next').textContent = next ? `Next review: ${dayText(next, day)}` : '';
+  renderDue(day);
+}
+
+// A count of the reviews due: on each quiz's button in the setup, and their
+// total on the Quiz tab.
+function renderDue(day = today()) {
+  let total = 0;
+  for (const button of document.querySelectorAll('#quiz-setup [data-setting=quiz] button')) {
+    const due = dueIn(progress, button.dataset.value, day).length;
+    total += due;
+    countOn(button, due);
+  }
+  countOn($('tabs').querySelector('[data-view=quiz]'), total);
+}
+
+function countOn(button, count) {
+  let badge = button.querySelector('.due-count');
+  if (!count) {
+    badge?.remove();
+    button.removeAttribute('aria-label');
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'due-count';
+    badge.setAttribute('aria-hidden', 'true');
+    button.append(badge);
+  }
+  badge.textContent = count;
+  button.setAttribute('aria-label', `${button.firstChild.textContent}, ${count} due for review`);
 }
 
 const focusAnswer = () => $('answer').focus({ preventScroll: true });
 const typed = () => Boolean(round && QUIZ_KINDS[round.quiz].typed);
 
-// Start, Again and Practice the misses all come here, inside the tap, so that
-// focusing the answer box brings up a phone's keyboard. A multiple-choice
-// round puts the keyboard away instead.
-function startRound(order = null) {
+// Start, Review, Again and Practice the misses all come here, inside the tap,
+// so that focusing the answer box brings up a phone's keyboard. A
+// multiple-choice round puts the keyboard away instead. `order` asks those
+// elements in turn; `size` is the set that multiple-choice options come from.
+function startRound({ order = null, size = settings.set, review = false } = {}) {
   clearTimeout(onwardTimer);
   endCelebration(true);
-  round = newRound(settings.quiz, settings.set, settings.length, order);
-  masteredBefore = new Set(round.pool.filter(z => levelOf(progress, round.quiz, z) === 'mastered'));
+  round = newRound(settings.quiz, size, settings.length, order, review);
+  masteredBefore = new Set(round.pool.filter(z => isMastered(progress, round.quiz, z)));
   started = Date.now();
   $('quiz').dataset.kind = typed() ? 'typed' : 'choice';
   ask();
@@ -589,8 +644,14 @@ function startRound(order = null) {
   else $('answer').blur();
 }
 
+// The reviews due in the quiz chosen, longest overdue first, from the whole table.
+function startReview() {
+  const due = dueIn(progress, settings.quiz, today()).slice(0, REVIEW_MOST);
+  if (due.length) startRound({ order: due, size: ELEMENTS.length, review: true });
+}
+
 function ask() {
-  const z = nextQuestion(round, progress, random);
+  const z = nextQuestion(round, progress, random, today());
   if (z === null) {
     finishRound();
     return;
@@ -617,8 +678,7 @@ function renderQuestion(z) {
     $('prompt-text').innerHTML = `<b>${element.name}</b><span>What is its symbol?</span>`;
     $('answer').placeholder = 'Its symbol';
   }
-  const n = round.asked.length;
-  $('quiz-count').textContent = round.length ? `Question ${n} of ${round.length}` : `Question ${n}`;
+  renderCount();
   renderScore();
   $('answer').value = '';
   $('feedback').textContent = '';
@@ -626,6 +686,13 @@ function renderQuestion(z) {
   $('btn-check').hidden = false;
   $('btn-showme').hidden = false;
   $('btn-onward').hidden = true;
+}
+
+// "Question 3 of 10", or "Review 3 of 5".
+function renderCount() {
+  const n = round.asked.length;
+  const word = round.review ? 'Review' : 'Question';
+  $('quiz-count').textContent = round.length ? `${word} ${n} of ${round.length}` : `${word} ${n}`;
 }
 
 function renderScore() {
@@ -647,8 +714,9 @@ function check() {
 function settle(result) {
   const z = question();
   const verdict = result.verdict === 'empty' ? 'wrong' : result.verdict;
-  record(progress, round.quiz, z, verdict);
+  record(progress, round.quiz, z, verdict, today());
   saveProgress();
+  renderDue();
   answerQuestion(round, verdict);
   setPhase('feedback');
   renderFeedback(z, verdict, result);
@@ -715,8 +783,7 @@ function renderChoice(z) {
     return `<button class="choice-btn" type="button" data-index="${i}"${option.z ? ` data-z="${option.z}"` : ''}` +
       `${option.key ? ` data-key="${option.key}"` : ''}><kbd>${i + 1}</kbd>${face}</button>`;
   }).join('');
-  const n = round.asked.length;
-  $('quiz-count').textContent = round.length ? `Question ${n} of ${round.length}` : `Question ${n}`;
+  renderCount();
   renderScore();
   $('feedback').textContent = '';
   $('feedback').className = 'feedback';
@@ -729,8 +796,9 @@ function choose(index) {
   const z = question();
   const element = byNumber(z);
   const verdict = index === choice.answer ? 'right' : 'wrong';
-  record(progress, round.quiz, z, verdict);
+  record(progress, round.quiz, z, verdict, today());
   saveProgress();
+  renderDue();
   answerQuestion(round, verdict);
   setPhase('feedback');
   [...$('choices').children].forEach((button, i) => {
@@ -789,12 +857,14 @@ function finishRound() {
   addRound(progress, {
     at: new Date().toISOString(), quiz: round.quiz, size: round.size,
     asked: score.asked, right: score.right, slips: score.slips, ms: Date.now() - started,
+    kind: round.review ? 'review' : '',
   });
-  const newly = round.pool.filter(z => !masteredBefore.has(z) && levelOf(progress, round.quiz, z) === 'mastered');
+  const newly = round.pool.filter(z => !masteredBefore.has(z) && isMastered(progress, round.quiz, z));
   const key = `${round.quiz}:${round.size}`;
   const setDone = allMastered(progress, round.quiz, poolOf(round.quiz, round.size)) && !progress.celebrated[key];
   if (setDone) progress.celebrated[key] = true;
   saveProgress();
+  renderDue();
   lastMissed = score.missed;
   const perfect = score.asked >= PERFECT_FROM && score.wrong === 0;
   renderSummary(score, Date.now() - started, newly, setDone, perfect);
@@ -820,6 +890,13 @@ function renderSummary(score, ms, newly, setDone, perfect) {
     parts.push(`<p>You have mastered every element in ${setLabel(round.size)} for ${QUIZ_KINDS[round.quiz].label}!</p>`);
   }
   if (newly.length) parts.push(`<p>Newly mastered: ${newly.map(z => byNumber(z).name).join(', ')}.</p>`);
+  // After reviews: how many more are due, or when the next one is.
+  const day = today();
+  const more = round.review ? dueIn(progress, round.quiz, day).length : 0;
+  const next = round.review && !more ? nextDue(progress, round.quiz, day) : 0;
+  if (more) parts.push(`<p>${more} more due for review.</p>`);
+  if (next) parts.push(`<p>Next review: ${dayText(next, day)}.</p>`);
+  $('btn-again').textContent = !round.review ? 'Again' : more ? `Review ${Math.min(more, REVIEW_MOST)} more` : 'Start a round';
   if (score.missed.length) {
     parts.push('<h3>To practice</h3><div class="tiles">' + score.missed.map(z => {
       const element = byNumber(z);
@@ -831,8 +908,14 @@ function renderSummary(score, ms, newly, setDone, perfect) {
 }
 
 $('btn-start').addEventListener('click', () => startRound());
-$('btn-again').addEventListener('click', () => startRound());
-$('btn-practice').addEventListener('click', () => startRound(shuffled(lastMissed, random)));
+$('btn-review').addEventListener('click', startReview);
+// After reviews, Again reviews what's still due, or else starts a round as set.
+$('btn-again').addEventListener('click', () => {
+  if (round?.review && dueIn(progress, settings.quiz, today()).length) startReview();
+  else startRound();
+});
+// The misses are practised with options from the same set as the round they were missed in.
+$('btn-practice').addEventListener('click', () => startRound({ order: shuffled(lastMissed, random), size: round.size }));
 $('btn-change').addEventListener('click', () => {
   endCelebration(true);
   setPhase('setup');
@@ -944,10 +1027,11 @@ document.addEventListener(
 
 // Each tile's level in the quiz the Progress page shows.
 function renderLevels() {
+  const day = today();
   const pool = new Set(poolOf(settings.shows, ELEMENTS.length));
   for (const cell of table.querySelectorAll('.cell[data-z]')) {
     const z = Number(cell.dataset.z);
-    cell.dataset.level = pool.has(z) ? levelOf(progress, settings.shows, z) : 'none';
+    cell.dataset.level = pool.has(z) ? levelOf(progress, settings.shows, z, day) : 'none';
   }
 }
 
@@ -958,15 +1042,26 @@ function when(iso) {
 
 function renderProgressView() {
   const quiz = settings.shows;
+  const day = today();
   $('progress-sets').innerHTML =
-    '<thead><tr><th>Elements</th><th>Mastered</th><th>Almost</th><th>Learning</th><th>New</th></tr></thead><tbody>' +
+    '<thead><tr><th>Elements</th><th>Mastered</th><th>Due</th><th>Almost</th><th>Learning</th><th>New</th></tr></thead><tbody>' +
     SETS.map(size => {
-      const counts = summarize(progress, quiz, poolOf(quiz, size));
-      return `<tr><th>${setLabel(size)}</th><td>${counts.mastered}</td><td>${counts.almost}</td><td>${counts.learning}</td><td>${counts.new}</td></tr>`;
+      const counts = summarize(progress, quiz, poolOf(quiz, size), day);
+      return `<tr><th>${setLabel(size)}</th>` +
+        ['mastered', 'due', 'almost', 'learning', 'new'].map(key => `<td>${counts[key]}</td>`).join('') + '</tr>';
     }).join('') + '</tbody>';
+  // The reviews: how many are due now, and the day the next one is.
+  const due = dueIn(progress, quiz, day).length;
+  const next = nextDue(progress, quiz, day);
+  let line = '';
+  if (due) line = `${due} due for review now${next ? `; next review ${dayText(next, day)}` : ''}.`;
+  else if (next) line = `Next review: ${dayText(next, day)}.`;
+  $('progress-next').textContent = line;
+  $('progress-next').hidden = !line;
   const rounds = progress.rounds.slice(-10).reverse();
   $('progress-rounds').innerHTML = rounds.length
-    ? rounds.map(r => `<li><span>${when(r.at)}</span><span>${QUIZ_KINDS[r.quiz]?.label ?? r.quiz}, ${setLabel(r.size)}</span>` +
+    ? rounds.map(r => `<li><span>${when(r.at)}</span>` +
+      `<span>${QUIZ_KINDS[r.quiz]?.label ?? r.quiz}, ${r.kind === 'review' ? 'review' : setLabel(r.size)}</span>` +
       `<b>${r.right}/${r.asked}</b></li>`).join('')
     : '<li class="muted">No rounds yet. Start one on the Quiz page.</li>';
 }
@@ -986,6 +1081,21 @@ $('btn-reset').addEventListener('click', () => {
   renderProgressView();
   renderLegend();
   renderPicks();
+  renderDue();
+});
+
+// A page left open overnight: when it's looked at again, what's due is
+// worked out afresh.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  renderDue();
+  if (view === 'quiz' && phase === 'setup') renderSetup();
+  if (view === 'progress') {
+    renderLevels();
+    renderLegend();
+    renderPicks();
+    renderProgressView();
+  }
 });
 
 // ---- Boxes and keys -----------------------------------------------------------
@@ -1097,5 +1207,6 @@ buildTable();
 renderSettings();
 renderPreview();
 setPhase('setup');
+renderDue();
 fit();
 window.addEventListener('resize', fit);

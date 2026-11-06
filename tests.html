@@ -20,12 +20,12 @@ import {
 } from './js/table.js';
 import { checkAnswer, normalize, distance, SLIP_FROM } from './js/answers.js';
 import {
-  emptyProgress, loadProgress, record, levelOf, recordOf, pickNext, summarize, allMastered, addRound,
-  MAX_ROUNDS, WEIGHTS,
+  emptyProgress, loadProgress, record, levelOf, recordOf, isMastered, pickNext, weightOf, summarize, allMastered,
+  addRound, dueList, nextDue, dayOf, dayText, MAX_ROUNDS, WEIGHTS, DUE_WEIGHT, MASTERED_WEIGHT, INTERVALS, TOP, FORMAT,
 } from './js/progress.js';
 import {
-  SETS, poolOf, newRound, nextQuestion, answerQuestion, roundOver, scoreOf, seeded, shuffled,
-  choiceQuestion, promptOf, withArticle, WEIGHT_GAP,
+  SETS, poolOf, dueIn, newRound, nextQuestion, answerQuestion, roundOver, scoreOf, seeded, shuffled,
+  choiceQuestion, promptOf, withArticle, WEIGHT_GAP, REVIEW_MOST,
 } from './js/quiz.js';
 import { shortMass } from './js/table.js';
 import { SOUNDS, renderSound } from './js/sound.js';
@@ -329,36 +329,64 @@ test('answers: edit distance', () => {
 
 // ---- Progress -------------------------------------------------------------------
 
+// A day number for the tests (see dayOf); any would do.
+const DAY = 20000;
+
 test('progress: right from new goes to 2, then up to Mastered at 4', () => {
   const progress = emptyProgress();
-  equal(levelOf(progress, 'name', 26), 'new', 'new');
-  equal(record(progress, 'name', 26, 'right'), { before: 0, after: 2 }, 'first');
-  equal(levelOf(progress, 'name', 26), 'learning', 'learning');
-  record(progress, 'name', 26, 'right');
-  equal(levelOf(progress, 'name', 26), 'almost', 'almost');
-  record(progress, 'name', 26, 'right');
-  equal(levelOf(progress, 'name', 26), 'mastered', 'mastered');
-  record(progress, 'name', 26, 'right');
-  record(progress, 'name', 26, 'right');
-  equal(recordOf(progress, 'name', 26), { step: 5, right: 5, wrong: 0, slips: 0, level: 'mastered' }, 'capped at 5');
+  equal(levelOf(progress, 'name', 26, DAY), 'new', 'new');
+  equal(record(progress, 'name', 26, 'right', DAY), { before: 0, after: 2 }, 'first');
+  equal(levelOf(progress, 'name', 26, DAY), 'learning', 'learning');
+  record(progress, 'name', 26, 'right', DAY);
+  equal(levelOf(progress, 'name', 26, DAY), 'almost', 'almost');
+  record(progress, 'name', 26, 'right', DAY);
+  equal(levelOf(progress, 'name', 26, DAY), 'mastered', 'mastered');
+  equal(recordOf(progress, 'name', 26, DAY), { step: 4, right: 3, wrong: 0, slips: 0, due: DAY + 3, level: 'mastered' },
+    'first review in 3 days');
 });
 
-test('progress: wrong drops two steps, never below 1', () => {
+test('progress: reviews come after 3 days, a week, a month, then every 3 months', () => {
   const progress = emptyProgress();
-  equal(record(progress, 'name', 8, 'wrong'), { before: 0, after: 1 }, 'new');
-  record(progress, 'name', 8, 'right');
-  record(progress, 'name', 8, 'right');
-  record(progress, 'name', 8, 'right');
-  equal(record(progress, 'name', 8, 'wrong'), { before: 4, after: 2 }, 'from mastered');
-  equal(record(progress, 'name', 8, 'wrong'), { before: 2, after: 1 }, 'to 1');
+  for (let i = 0; i < 3; i++) record(progress, 'name', 26, 'right', DAY);
+  equal(record(progress, 'name', 26, 'right', DAY + 1), { before: 4, after: 4 }, 'right before it is due only counts');
+  equal(recordOf(progress, 'name', 26, DAY + 1).due, DAY + 3, 'the review day stays');
+  equal(levelOf(progress, 'name', 26, DAY + 2), 'mastered', 'not due the day before');
+  equal(levelOf(progress, 'name', 26, DAY + 3), 'due', 'due on the day');
+  equal(levelOf(progress, 'name', 26, DAY + 40), 'due', 'and after');
+  let day = DAY + 5; // two days late
+  for (const [step, wait] of [[5, 7], [6, 30], [7, 90], [7, 90]]) {
+    equal(record(progress, 'name', 26, 'right', day).after, step, `step ${step}`);
+    equal(recordOf(progress, 'name', 26, day).due, day + wait, `step ${step}: next in ${wait} days`);
+    day += wait;
+  }
+  equal(recordOf(progress, 'name', 26, day).right, 8, 'every answer counted');
+  equal([TOP, INTERVALS[TOP]], [7, 90], 'the top step, every 3 months');
 });
 
-test('progress: a slip scores but moves nothing up', () => {
+test('progress: wrong drops two steps, never below 1; still Mastered, it comes back sooner', () => {
   const progress = emptyProgress();
-  equal(record(progress, 'name', 42, 'slip'), { before: 0, after: 1 }, 'new becomes learning');
-  record(progress, 'name', 42, 'right');
-  equal(record(progress, 'name', 42, 'slip'), { before: 2, after: 2 }, 'no change');
-  equal(recordOf(progress, 'name', 42).slips, 2, 'counted');
+  equal(record(progress, 'name', 8, 'wrong', DAY), { before: 0, after: 1 }, 'new');
+  record(progress, 'name', 8, 'right', DAY);
+  record(progress, 'name', 8, 'right', DAY);
+  record(progress, 'name', 8, 'right', DAY);
+  equal(record(progress, 'name', 8, 'wrong', DAY), { before: 4, after: 2 }, 'from mastered');
+  equal(recordOf(progress, 'name', 8, DAY).due, 0, 'no review while learning');
+  equal(record(progress, 'name', 8, 'wrong', DAY), { before: 2, after: 1 }, 'to 1');
+  progress.items.name[9] = [6, 5, 0, 0, 0, DAY];
+  equal(record(progress, 'name', 9, 'wrong', DAY), { before: 6, after: 4 }, 'from 6, when due');
+  equal(recordOf(progress, 'name', 9, DAY), { step: 4, right: 5, wrong: 1, slips: 0, due: DAY + 3, level: 'mastered' },
+    'still mastered, back in 3 days');
+});
+
+test('progress: a slip scores but moves nothing up, and passes no review', () => {
+  const progress = emptyProgress();
+  equal(record(progress, 'name', 42, 'slip', DAY), { before: 0, after: 1 }, 'new becomes learning');
+  record(progress, 'name', 42, 'right', DAY);
+  equal(record(progress, 'name', 42, 'slip', DAY), { before: 2, after: 2 }, 'no change');
+  equal(recordOf(progress, 'name', 42, DAY).slips, 2, 'counted');
+  progress.items.name[43] = [5, 4, 0, 0, 0, DAY - 1];
+  equal(record(progress, 'name', 43, 'slip', DAY), { before: 5, after: 5 }, 'a slip in a review');
+  equal(recordOf(progress, 'name', 43, DAY).level, 'due', 'still due');
 });
 
 test('progress: each quiz keeps its own record', () => {
@@ -375,26 +403,66 @@ test('progress: the next pick leaves out the last three', () => {
   equal(pickNext(progress, 'name', [1, 2], [1], random), 2, 'a pool of two');
 });
 
-test('progress: picks lean towards what is being learned', () => {
+test('progress: picks lean towards what is being learned, and what is due', () => {
   const progress = emptyProgress();
-  for (let i = 0; i < 4; i++) record(progress, 'name', 1, 'right'); // step 5
-  record(progress, 'name', 2, 'wrong'); // step 1
+  progress.items.name[1] = [5, 4, 0, 0, 0, DAY + 7]; // mastered
+  progress.items.name[2] = [1, 0, 1, 0, 0, 0]; // learning
+  progress.items.name[4] = [5, 4, 0, 0, 0, DAY]; // due today
+  const weights = [1, 2, 3, 4].map(z => weightOf(progress, 'name', z, DAY));
+  equal(weights, [MASTERED_WEIGHT, WEIGHTS[1], WEIGHTS[0], DUE_WEIGHT], 'weights');
+  equal([WEIGHTS, DUE_WEIGHT, MASTERED_WEIGHT], [[3, 6, 4, 2], 5, 0.5], 'as planned');
   const random = seeded(11);
-  const counts = { 1: 0, 2: 0, 3: 0 };
-  for (let i = 0; i < 3000; i++) counts[pickNext(progress, 'name', [1, 2, 3], [], random)]++;
-  const share = z => counts[z] / 3000;
-  const total = WEIGHTS[5] + WEIGHTS[1] + WEIGHTS[0];
-  equal(Math.abs(share(1) - WEIGHTS[5] / total) < 0.03, true, `mastered ${share(1).toFixed(3)}`);
-  equal(Math.abs(share(2) - WEIGHTS[1] / total) < 0.03, true, `learning ${share(2).toFixed(3)}`);
-  equal(Math.abs(share(3) - WEIGHTS[0] / total) < 0.03, true, `new ${share(3).toFixed(3)}`);
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  for (let i = 0; i < 4000; i++) counts[pickNext(progress, 'name', [1, 2, 3, 4], [], random, DAY)]++;
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  [1, 2, 3, 4].forEach((z, i) => {
+    const share = counts[z] / 4000;
+    equal(Math.abs(share - weights[i] / total) < 0.03, true, `element ${z}: ${share.toFixed(3)}`);
+  });
 });
 
 test('progress: set summaries', () => {
   const progress = emptyProgress();
-  for (let i = 0; i < 3; i++) record(progress, 'symbol', 1, 'right');
-  record(progress, 'symbol', 2, 'wrong');
-  equal(summarize(progress, 'symbol', [1, 2, 3, 4]), { new: 2, learning: 1, almost: 0, mastered: 1 });
-  equal([allMastered(progress, 'symbol', [1]), allMastered(progress, 'symbol', [1, 2])], [true, false]);
+  for (let i = 0; i < 3; i++) record(progress, 'symbol', 1, 'right', DAY);
+  record(progress, 'symbol', 2, 'wrong', DAY);
+  progress.items.symbol[5] = [6, 5, 0, 0, 0, DAY];
+  equal(summarize(progress, 'symbol', [1, 2, 3, 4, 5], DAY), { new: 2, learning: 1, almost: 0, due: 1, mastered: 1 });
+  equal([allMastered(progress, 'symbol', [1]), allMastered(progress, 'symbol', [1, 5]), allMastered(progress, 'symbol', [1, 2])],
+    [true, true, false], 'due for review still counts as mastered');
+  equal([isMastered(progress, 'symbol', 5), isMastered(progress, 'symbol', 2)], [true, false], 'isMastered');
+});
+
+test('progress: the reviews due, longest overdue first, and the next one', () => {
+  const progress = emptyProgress();
+  progress.items.name = {
+    3: [4, 3, 0, 0, 0, DAY + 2],
+    5: [6, 5, 0, 0, 0, DAY - 1],
+    1: [4, 3, 0, 0, 0, DAY - 1],
+    2: [5, 4, 0, 0, 0, DAY - 3],
+    7: [3, 2, 0, 0, 0, 0],
+    9: [7, 9, 0, 0, 0, DAY + 60],
+  };
+  equal(dueList(progress, 'name', DAY), [2, 1, 5], 'due today');
+  equal(nextDue(progress, 'name', DAY), DAY + 2, 'the next');
+  equal(dueList(progress, 'name', DAY + 2), [2, 1, 5, 3], 'two days on');
+  equal(nextDue(progress, 'name', DAY + 60), 0, 'none after the last');
+  equal(dueList(progress, 'symbol', DAY), [], 'another quiz');
+  progress.items.weight = { 43: [4, 3, 0, 0, 0, DAY], 26: [4, 3, 0, 0, 0, DAY] };
+  equal(dueIn(progress, 'weight', DAY), [26], 'only what the quiz asks about');
+  equal(REVIEW_MOST, 20, 'at most 20 in a round');
+});
+
+test('progress: days are counted where you are', () => {
+  const early = new Date(2026, 10, 8, 0, 5).getTime();
+  const late = new Date(2026, 10, 8, 23, 55).getTime();
+  equal(dayOf(late), dayOf(early), 'one day');
+  equal(dayOf(new Date(2026, 10, 9, 0, 5).getTime()), dayOf(early) + 1, 'the next');
+  // Across the clocks changing, in the US at least.
+  equal(dayOf(new Date(2026, 2, 9, 12).getTime()) - dayOf(new Date(2026, 2, 7, 12).getTime()), 2, 'March');
+  equal(dayOf(new Date(2026, 10, 2, 12).getTime()) - dayOf(new Date(2026, 9, 31, 12).getTime()), 2, 'November');
+  const day = dayOf(early);
+  equal([dayText(day, day), dayText(day, day - 1)], ['today', 'tomorrow'], 'near');
+  equal(dayText(day, day - 5), new Date(2026, 10, 8).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), 'later');
 });
 
 test(`progress: the last ${MAX_ROUNDS} rounds are kept`, () => {
@@ -406,27 +474,46 @@ test(`progress: the last ${MAX_ROUNDS} rounds are kept`, () => {
 
 test('progress: a save survives a reload', () => {
   const progress = emptyProgress();
-  record(progress, 'name', 26, 'right');
-  record(progress, 'symbol', 79, 'slip');
+  record(progress, 'name', 26, 'right', DAY);
+  record(progress, 'symbol', 79, 'slip', DAY);
+  for (let i = 0; i < 3; i++) record(progress, 'series', 8, 'right', DAY);
   addRound(progress, { at: '2026-11-05T12:00:00.000Z', quiz: 'name', size: 20, asked: 10, right: 9, slips: 1, ms: 61000 });
+  addRound(progress, { at: '2026-11-08T12:00:00.000Z', quiz: 'series', size: 118, asked: 1, right: 1, slips: 0, ms: 4000, kind: 'review' });
   progress.celebrated['name:20'] = true;
-  equal(loadProgress(JSON.parse(JSON.stringify(progress))), progress);
+  equal(loadProgress(JSON.parse(JSON.stringify(progress)), DAY), progress);
+  equal(progress.v, FORMAT, 'format');
 });
 
 test('progress: damaged saves fall back to zero', () => {
-  equal(loadProgress(null), emptyProgress(), 'nothing');
-  equal(loadProgress('junk'), emptyProgress(), 'a string');
+  equal(loadProgress(null, DAY), emptyProgress(), 'nothing');
+  equal(loadProgress('junk', DAY), emptyProgress(), 'a string');
   const loaded = loadProgress({
     asked: -4,
-    items: { name: { 26: [9, 3, 'x', -1, 2], 0: [1, 1, 0, 0, 0], 200: [1, 1, 0, 0, 0], abc: [1, 1, 0, 0, 0], 5: 'no', 6: [0, 0, 0, 0, 0] }, symbol: [] },
-    rounds: [{ at: 7, quiz: 'name', size: '20', asked: 10, right: 8 }, 'junk'],
+    items: { name: { 26: [9, 3, 'x', -1, 2, 'soon'], 0: [1, 1, 0, 0, 0], 200: [1, 1, 0, 0, 0], abc: [1, 1, 0, 0, 0], 5: 'no', 6: [0, 0, 0, 0, 0] }, symbol: [] },
+    rounds: [{ at: 7, quiz: 'name', size: '20', asked: 10, right: 8, kind: 3 }, 'junk'],
     celebrated: { 'name:20': true, 'x y': true, 'symbol:36': 'yes' },
-  });
+  }, DAY);
   equal(loaded.asked, 0, 'asked');
-  equal(loaded.items.name, { 26: [5, 3, 0, 0, 0] }, 'items');
+  equal(loaded.items.name, { 26: [7, 3, 0, 0, 0, DAY + 90] }, 'items');
   equal(loaded.items.symbol, {}, 'symbol');
-  equal(loaded.rounds, [{ at: '', quiz: 'name', size: 0, asked: 10, right: 8, slips: 0, ms: 0 }], 'rounds');
+  equal(loaded.rounds, [{ at: '', quiz: 'name', size: 0, asked: 10, right: 8, slips: 0, ms: 0, kind: '' }], 'rounds');
   equal(loaded.celebrated, { 'name:20': true }, 'celebrated');
+});
+
+test('progress: a save from before reviews gets them, and a far-off review is brought in', () => {
+  const loaded = loadProgress({
+    v: 1,
+    items: {
+      name: { 1: [4, 3, 0, 0, 3], 2: [5, 4, 0, 0, 4], 3: [3, 2, 0, 0, 5] },
+      symbol: { 6: [6, 5, 0, 0, 6, DAY + 5000], 7: [4, 3, 0, 0, 7, DAY - 9] },
+    },
+    asked: 7,
+  }, DAY);
+  equal(loaded.items.name, { 1: [4, 3, 0, 0, 3, DAY + 3], 2: [5, 4, 0, 0, 4, DAY + 7], 3: [3, 2, 0, 0, 5, 0] },
+    'first reviews counted from today');
+  equal(loaded.items.symbol, { 6: [6, 5, 0, 0, 6, DAY + 30], 7: [4, 3, 0, 0, 7, DAY - 9] },
+    'never further off than the wait; one overdue stays due');
+  equal(loaded.v, FORMAT, 'the new format');
 });
 
 // ---- Rounds ---------------------------------------------------------------------
@@ -479,6 +566,22 @@ test('quiz: a round of the misses asks just those, in order', () => {
     answerQuestion(round, 'right');
   }
   equal(asked, [8, 3, 15]);
+});
+
+test('quiz: a review round asks what is due, in that order, and says it is a review', () => {
+  const progress = emptyProgress();
+  progress.items.name = { 1: [4, 3, 0, 0, 0, DAY - 1], 2: [5, 4, 0, 0, 0, DAY - 3], 3: [4, 3, 0, 0, 0, DAY + 2] };
+  const round = newRound('name', 118, 10, dueIn(progress, 'name', DAY), true);
+  const asked = [];
+  for (let z = nextQuestion(round, progress, Math.random, DAY); z !== null; z = nextQuestion(round, progress, Math.random, DAY)) {
+    asked.push(z);
+    record(progress, 'name', z, 'right', DAY);
+    answerQuestion(round, 'right');
+  }
+  equal([asked, round.review, newRound('name', 20, 10).review], [[2, 1], true, false], 'asked');
+  equal([progress.items.name[2][0], progress.items.name[2][5], progress.items.name[1][0], progress.items.name[1][5]],
+    [6, DAY + 30, 5, DAY + 7], 'passed: up a step, and on to the next wait');
+  equal(dueIn(progress, 'name', DAY), [], 'none left');
 });
 
 test('quiz: the same seed asks the same questions', () => {

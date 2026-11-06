@@ -3,13 +3,16 @@
 
 import { ELEMENTS } from './elements.js';
 import { CATEGORIES, hasStandardWeight, shortMass, categoryOf, placeOf, neighbour } from './table.js';
-import { pickNext } from './progress.js';
+import { pickNext, dueList } from './progress.js';
 
 // The elements a quiz can draw on: 1 to N.
 export const SETS = [20, 36, 54, 86, 118];
 
 // Questions in a round; 0 keeps going until Finish.
 export const LENGTHS = [10, 20, 0];
+
+// The most reviews in one round.
+export const REVIEW_MOST = 20;
 
 // The quizzes. Typed ones are answered in the box; the others by choosing.
 export const QUIZ_KINDS = {
@@ -32,15 +35,24 @@ export function poolOf(quiz, size) {
     (quiz !== 'series' || element.z < 109)).map(element => element.z);
 }
 
+// The elements due for review in a quiz, the longest overdue first, from
+// the whole table whatever set is chosen.
+export function dueIn(progress, quiz, today) {
+  const pool = new Set(poolOf(quiz, ELEMENTS.length));
+  return dueList(progress, quiz, today).filter(z => pool.has(z));
+}
+
 // A round. With `order`, the questions are those elements in that order (as
-// for practising the ones missed) instead of picks from the pool.
-export function newRound(quiz, size, length, order = null) {
+// for practising the ones missed, or a review) instead of picks from the
+// pool. A review round is marked so the page can say so.
+export function newRound(quiz, size, length, order = null, review = false) {
   return {
     quiz,
     size,
     length: order ? order.length : length,
     pool: order ? [...order] : poolOf(quiz, size),
     order,
+    review,
     asked: [], // the elements asked so far, in order
     answers: [], // { z, verdict } for each answered
     streak: 0,
@@ -50,10 +62,11 @@ export function newRound(quiz, size, length, order = null) {
 
 export const roundOver = round => round.length > 0 && round.answers.length >= round.length;
 
-// The next element to ask about, or null when the round is over.
-export function nextQuestion(round, progress, random = Math.random) {
+// The next element to ask about, or null when the round is over. `today` is
+// the day number (see dayOf), which decides what's due; left out, it is today.
+export function nextQuestion(round, progress, random = Math.random, today) {
   if (roundOver(round)) return null;
-  const z = round.order ? round.order[round.asked.length] : pickNext(progress, round.quiz, round.pool, round.asked, random);
+  const z = round.order ? round.order[round.asked.length] : pickNext(progress, round.quiz, round.pool, round.asked, random, today);
   round.asked.push(z);
   return z;
 }

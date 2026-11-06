@@ -28,14 +28,18 @@ It is a static page: plain HTML, CSS and JavaScript modules, with no build step.
 - A right answer moves on by itself. After a slip or a wrong answer, **Next** (or `Enter`) moves on.
 - At the end you get your score, the elements you missed, and three choices: **Practice the misses**, **Again** or **Change quiz**. Tap a missed element to open its details.
 - A perfect round of ten or more, or the first time a whole set is mastered, gets fireworks and a fanfare.
+- **Reviews:** when mastered elements are due for review, the Quiz tab shows how many, and so does each quiz's button.
+  - **Review N due**, under Start, asks the ones due in the chosen quiz, longest overdue first, up to 20 at a time. It covers the whole table, whichever elements are chosen.
+  - When none are due, the setup says when the next review is.
 
 ## Progress
 
-- Each element has a level in each quiz: **New**, **Learning**, **Almost** or **Mastered**.
+- Each element has a level in each quiz: **New**, **Learning**, **Almost**, **Mastered** or **Due for review**.
   - Three right answers in a row take an element from new to Mastered.
-  - A wrong answer drops it two steps.
-  - The quiz asks most about what you are still learning, and now and then about what you have mastered.
-- The **Progress** page colors the table by level, counts each set, and lists recent rounds. An element's details show your record with it.
+  - A mastered element comes back for review after 3 days, then a week, then a month, then every 3 months. Answered right when it's due, it waits longer next time. Answered right before then, it only counts, so one sitting can't rush it.
+  - A wrong answer drops it two steps. If it's still Mastered, its review comes sooner.
+  - The quiz asks most about what you are still learning and what is due for review, and now and then about what you have mastered.
+- The **Progress** page colors the table by level, counts each set, says how many are due and when the next review is, and lists recent rounds. An element's details show your record with it, and when it's next reviewed.
 - **Reset progress** (tap it twice) starts again.
 - Progress is kept in this browser on this device.
 
@@ -74,8 +78,8 @@ Raise `VERSION` and `RELEASED` at the top of `js/ui.js`. The About box shows the
 | `js/table.js` | Where each element sits; the series, blocks and states; shells; how numbers are written |
 | `js/elements.js` | The 118 elements |
 | `js/answers.js` | Checking a typed answer: other spellings, and a slip forgiven |
-| `js/progress.js` | What the quizzes have taught: a level for each quiz and element, choosing what to ask next, round history |
-| `js/quiz.js` | Rounds of questions, and the multiple-choice questions with their wrong options |
+| `js/progress.js` | What the quizzes have taught: a level for each quiz and element, the day each is due for review, choosing what to ask next, round history |
+| `js/quiz.js` | Rounds of questions (review rounds too), and the multiple-choice questions with their wrong options |
 | `js/sound.js` | Sound effects, generated with the Web Audio API (no audio files) |
 | `js/fanfare.js`, `js/celebrate.js` | The brass fanfare and the fireworks, shared with the other games |
 | `tests.html` | Tests for the data, the table, Find, answers, progress, rounds, sound and the fireworks; `?only=answers` runs just one group |
