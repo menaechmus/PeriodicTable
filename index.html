@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b1626">
-<meta name="description" content="An interactive periodic table: tap any element, or slide a finger across the table, to see its details, then learn the names and symbols with a quiz that keeps track of what you know.">
+<meta name="description" content="An interactive periodic table: tap any element, or slide a finger across the table, to see its details, then learn names, symbols, atomic weights and series with quizzes that keep track of what you know.">
 <title>Periodic Table</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23f6c955%22/><text x=%2250%22 y=%2268%22 text-anchor=%22middle%22 font-family=%22Georgia,serif%22 font-size=%2252%22 font-weight=%22700%22 fill=%22%232b2205%22>Au</text></svg>">
 <link rel="stylesheet" href="css/style.css">
@@ -54,9 +54,11 @@
     <section id="quiz-setup" class="quiz-setup">
       <div class="option stacked">
         <h2 class="label">Quiz</h2>
-        <div class="choice" data-setting="quiz" role="group" aria-label="Quiz">
+        <div class="choice quad" data-setting="quiz" role="group" aria-label="Quiz">
           <button data-value="name">Symbol → name</button>
           <button data-value="symbol">Name → symbol</button>
+          <button data-value="weight">Atomic weight</button>
+          <button data-value="series">Series</button>
         </div>
       </div>
       <div class="option stacked">
@@ -96,6 +98,7 @@
         <input id="answer" class="answer-input" type="text" aria-label="Your answer" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
         <button id="btn-check" class="btn primary" type="submit">Check</button>
       </form>
+      <div id="choices" class="choices" role="group" aria-label="Choices"></div>
       <div class="quiz-actions">
         <button id="btn-showme" class="btn" type="button">Show me</button>
         <button id="btn-onward" class="btn primary" type="button" hidden>Next</button>
@@ -116,9 +119,11 @@
 
   <main id="progress" class="screen explore" data-layout="stack" hidden>
     <div id="progress-tools" class="toolbar">
-      <div class="choice" data-setting="shows" role="group" aria-label="Progress for">
+      <div class="choice quad" data-setting="shows" role="group" aria-label="Progress for">
         <button data-value="name">Symbol → name</button>
         <button data-value="symbol">Name → symbol</button>
+        <button data-value="weight">Atomic weight</button>
+        <button data-value="series">Series</button>
       </div>
     </div>
     <section class="progress-more">

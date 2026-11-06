@@ -23,7 +23,11 @@ import {
   emptyProgress, loadProgress, record, levelOf, recordOf, pickNext, summarize, allMastered, addRound,
   MAX_ROUNDS, WEIGHTS,
 } from './js/progress.js';
-import { SETS, poolOf, newRound, nextQuestion, answerQuestion, roundOver, scoreOf, seeded, shuffled } from './js/quiz.js';
+import {
+  SETS, poolOf, newRound, nextQuestion, answerQuestion, roundOver, scoreOf, seeded, shuffled,
+  choiceQuestion, promptOf, withArticle, WEIGHT_GAP,
+} from './js/quiz.js';
+import { shortMass } from './js/table.js';
 import { SOUNDS, renderSound } from './js/sound.js';
 import { createShow, advance, isOver } from './js/celebrate.js';
 
@@ -239,6 +243,11 @@ test('table: densities, gases per litre', () => {
   equal(density(byNumber(26)), '7.874 g/cm³', 'Fe');
   equal(density(byNumber(80)), '13.53 g/cm³', 'Hg');
   equal(density(byNumber(118)), null, 'Og');
+});
+
+test('table: weights to two decimals, rounded as a school table does', () => {
+  const short = sym => shortMass(ELEMENTS.find(element => element.sym === sym));
+  equal(['H', 'He', 'O', 'Mg', 'Si', 'Fe', 'Cu', 'Pb'].map(short), ['1.01', '4.00', '16.00', '24.31', '28.09', '55.85', '63.55', '207.20']);
 });
 
 test('table: writing', () => {
@@ -487,6 +496,86 @@ test('quiz: the same seed asks the same questions', () => {
   };
   equal(play(), play());
   equal(shuffled([1, 2, 3, 4, 5], seeded(1)).sort(), [1, 2, 3, 4, 5], 'shuffled keeps them all');
+});
+
+test('quiz: weight questions offer four weights or elements, clear of each other', () => {
+  const forms = { value: 0, pick: 0 };
+  for (const seed of [1, 2, 3]) {
+    const random = seeded(seed);
+    for (const size of SETS) {
+      const pool = poolOf('weight', size);
+      for (const z of pool) {
+        const question = choiceQuestion('weight', z, pool, random);
+        const label = `${byNumber(z).sym} in 1-${size}`;
+        const zs = question.options.map(option => option.z);
+        equal(zs.length, 4, `${label}: four`);
+        equal(new Set(zs).size, 4, `${label}: all different`);
+        equal(zs[question.answer], z, `${label}: the answer`);
+        equal(zs.every(other => pool.includes(other)), true, `${label}: from the set`);
+        const weights = zs.map(other => Number(shortMass(byNumber(other))));
+        for (let i = 0; i < 4; i++) {
+          for (let j = i + 1; j < 4; j++) {
+            if (Math.abs(weights[i] - weights[j]) < WEIGHT_GAP - 1e-9) throw new Error(`${label}: ${weights[i]} and ${weights[j]} too close`);
+          }
+        }
+        const labels = question.options.map(option => option.label);
+        if (question.form === 'value') equal(labels, weights.map(weight => weight.toFixed(2)), `${label}: weights shown`);
+        else equal(labels, zs.map(other => byNumber(other).name), `${label}: names shown`);
+        forms[question.form]++;
+      }
+    }
+  }
+  equal(forms.value > 100 && forms.pick > 100, true, `both ways: ${JSON.stringify(forms)}`);
+});
+
+test('quiz: series questions offer four series, or one element of the series among four', () => {
+  const forms = { which: 0, pick: 0 };
+  const keys = new Set(CATEGORIES.map(category => category.key));
+  for (const seed of [4, 5, 6]) {
+    const random = seeded(seed);
+    for (const size of SETS) {
+      const pool = poolOf('series', size);
+      for (const z of pool) {
+        const element = byNumber(z);
+        const question = choiceQuestion('series', z, pool, random);
+        const label = `${element.sym} in 1-${size}`;
+        equal(question.options.length, 4, `${label}: four`);
+        if (question.form === 'which') {
+          const offered = question.options.map(option => option.key);
+          equal(new Set(offered).size, 4, `${label}: four different series`);
+          equal(offered.every(key => keys.has(key)), true, `${label}: real series`);
+          equal(offered[question.answer], element.cat, `${label}: the answer`);
+        } else {
+          const zs = question.options.map(option => option.z);
+          equal(new Set(zs).size, 4, `${label}: four different elements`);
+          equal(zs.every(other => pool.includes(other)), true, `${label}: from the set`);
+          equal(zs.filter(other => byNumber(other).cat === element.cat), [z], `${label}: only the answer in its series`);
+          equal(zs[question.answer], z, `${label}: the answer`);
+        }
+        forms[question.form]++;
+      }
+    }
+  }
+  equal(forms.which > 100 && forms.pick > 100, true, `both ways: ${JSON.stringify(forms)}`);
+});
+
+test('quiz: how multiple-choice questions are put', () => {
+  const asked = (quiz, z, form) => {
+    const random = seeded(1);
+    for (let i = 0; i < 50; i++) {
+      const question = choiceQuestion(quiz, z, poolOf(quiz, 36), random);
+      if (question.form === form) return question;
+    }
+    throw new Error(`no ${form} question`);
+  };
+  equal(promptOf(asked('weight', 26, 'value')), 'What is the atomic weight of iron (Fe)?', 'weight');
+  equal(promptOf(asked('weight', 26, 'pick')), 'Which element has an atomic weight of 55.85?', 'element');
+  equal(promptOf(asked('series', 35, 'which')), 'Which series is bromine (Br) in?', 'series');
+  equal(promptOf(asked('series', 35, 'pick')), 'Which of these is a halogen?', 'one of a series');
+  equal(asked('series', 35, 'which').explain, 'Bromine is a halogen.', 'explained');
+  equal([withArticle('Alkali metal'), withArticle('Actinide'), withArticle('Noble gas')], ['an alkali metal', 'an actinide', 'a noble gas'], 'a or an');
+  const weights = asked('weight', 26, 'value').explain.split(' · ');
+  equal(weights.length === 4 && weights.includes('Fe 55.85'), true, `weights explained: ${weights}`);
 });
 
 // ---- Sound and celebration --------------------------------------------------------

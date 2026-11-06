@@ -1,6 +1,6 @@
 # Periodic Table
 
-An interactive periodic table for the browser. Tap any element, or slide a finger across the table, to see its details: weight, series, electron shells, melting and boiling points, where its name comes from and what it is known for. A quiz teaches the names and symbols and keeps track of how well you know each one.
+An interactive periodic table for the browser. Tap any element, or slide a finger across the table, to see its details: weight, series, electron shells, melting and boiling points, where its name comes from and what it is known for. Quizzes teach the names, symbols, atomic weights and series, and keep track of how well you know each element.
 
 It is a static page: plain HTML, CSS and JavaScript modules, with no build step. It works on phones and computers alike and is served from GitHub Pages.
 
@@ -15,12 +15,17 @@ It is a static page: plain HTML, CSS and JavaScript modules, with no build step.
 
 ## The quiz
 
-- On the **Quiz** page, choose **Symbol → name** or **Name → symbol**, which elements (1–20 up to all 118), and how many questions (10, 20 or Keep going), then **Start**.
-- Type the answer and press `Enter` (or **Check**).
+- On the **Quiz** page, choose a quiz, which elements (1–20 up to all 118), and how many questions (10, 20 or Keep going), then **Start**. There are four quizzes:
+  - **Symbol → name** and **Name → symbol**: type the answer.
+  - **Atomic weight** and **Series**: pick one of four.
+- For the typed quizzes, type the answer and press `Enter` (or **Check**).
   - Capital letters don't matter. Aluminium, sulphur and caesium are accepted as well as aluminum, sulfur and cesium.
   - A one-letter slip in a name of six letters or more counts as right, with the right spelling shown. The element isn't counted as better known until it's spelled exactly.
+  - **Show me** gives the answer, which counts as wrong.
+- **Atomic weight** asks two ways: the weight of an element, or which element has a weight. The weights are to two decimals, as school tables print them. It covers the 84 elements that have a standard atomic weight.
+- **Series** also asks two ways: which series an element is in, or which of four elements belongs to a series. It covers elements 1–108; the series of 109 onward are only predictions.
+- Pick with a tap, or with the keys `1` to `4`.
 - A right answer moves on by itself. After a slip or a wrong answer, **Next** (or `Enter`) moves on.
-- **Show me** gives the answer, which counts as wrong.
 - At the end you get your score, the elements you missed, and three choices: **Practice the misses**, **Again** or **Change quiz**. Tap a missed element to open its details.
 - A perfect round of ten or more, or the first time a whole set is mastered, gets fireworks and a fanfare.
 
@@ -70,7 +75,7 @@ Raise `VERSION` and `RELEASED` at the top of `js/ui.js`. The About box shows the
 | `js/elements.js` | The 118 elements |
 | `js/answers.js` | Checking a typed answer: other spellings, and a slip forgiven |
 | `js/progress.js` | What the quizzes have taught: a level for each quiz and element, choosing what to ask next, round history |
-| `js/quiz.js` | Rounds of questions |
+| `js/quiz.js` | Rounds of questions, and the multiple-choice questions with their wrong options |
 | `js/sound.js` | Sound effects, generated with the Web Audio API (no audio files) |
 | `js/fanfare.js`, `js/celebrate.js` | The brass fanfare and the fireworks, shared with the other games |
 | `tests.html` | Tests for the data, the table, Find, answers, progress, rounds, sound and the fireworks; `?only=answers` runs just one group |

@@ -181,8 +181,15 @@ export const yearText = year => (year === 0 ? 'Ancient times' : String(year));
 
 export const hasStandardWeight = element => !element.mass.startsWith('[');
 
-// The weight to two decimals, as the weight quiz shows it.
-export const shortMass = element => Number(element.mass).toFixed(2);
+// The weight to two decimals, as the weight quiz shows it. Rounded from the
+// printed digits: in floating point 55.845 is 55.84499..., which toFixed
+// would turn into 55.84 rather than the 55.85 a school table gives.
+export function shortMass(element) {
+  const [whole, fraction = ''] = element.mass.split('.');
+  const digits = `${fraction}000`.slice(0, 3);
+  const hundredths = Number(whole) * 100 + Number(digits.slice(0, 2)) + (Number(digits[2]) >= 5 ? 1 : 0);
+  return (hundredths / 100).toFixed(2);
+}
 
 // '[Ar]3d6 4s2' as HTML with the electron counts raised.
 export function configHtml(config) {

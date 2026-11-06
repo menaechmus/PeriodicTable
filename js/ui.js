@@ -8,17 +8,20 @@
 import { ELEMENTS } from './elements.js';
 import {
   CATEGORIES, BLOCKS, STATES, PLACEHOLDERS, byNumber, categoryOf, placeOf, neighbour,
-  shellsOf, stateOf, temperature, density, yearText, configHtml, minus, findElements,
+  shellsOf, stateOf, temperature, density, yearText, configHtml, minus, findElements, shortMass,
 } from './table.js';
 import { checkAnswer } from './answers.js';
 import { LEVELS, emptyProgress, loadProgress, record, levelOf, recordOf, summarize, allMastered, addRound } from './progress.js';
-import { SETS, QUIZ_KINDS, poolOf, newRound, nextQuestion, answerQuestion, roundOver, scoreOf, seeded, shuffled } from './quiz.js';
+import {
+  SETS, QUIZ_KINDS, poolOf, newRound, nextQuestion, answerQuestion, roundOver, scoreOf, seeded, shuffled,
+  choiceQuestion, withArticle,
+} from './quiz.js';
 import { playSound, setMuted, unlockSound } from './sound.js';
 import { startParty } from './celebrate.js';
 
 // Shown in the About box. Bump both with every release: a browser still
 // running a cached copy of this file then shows the old number.
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const RELEASED = '5 November 2026';
 
 const SETTINGS_KEY = 'periodic.settings';
@@ -97,6 +100,7 @@ let found = []; // the elements Find matches, best first
 let opener = null; // what had the focus before the details box opened
 // The quiz
 let round = null; // the round being played (see quiz.js)
+let choice = null; // a multiple-choice question being asked (see choiceQuestion)
 let phase = 'setup'; // 'setup', 'asking', 'feedback' or 'done'
 let started = 0; // when the round began
 let masteredBefore = new Set(); // the elements already mastered when it began
@@ -521,7 +525,7 @@ function show(next) {
   $('btn-reset').textContent = 'Reset progress';
   if (view === 'quiz') {
     if (phase === 'setup') renderSetup();
-    if (phase === 'asking' || phase === 'feedback') focusAnswer();
+    if ((phase === 'asking' || phase === 'feedback') && typed()) focusAnswer();
   } else {
     $('answer').blur(); // a phone's keyboard goes away with the quiz
     (view === 'progress' ? $('progress-tools') : $('toolbar')).after($('board-wrap'), $('hint'));
@@ -568,17 +572,21 @@ function renderSetup() {
 }
 
 const focusAnswer = () => $('answer').focus({ preventScroll: true });
+const typed = () => Boolean(round && QUIZ_KINDS[round.quiz].typed);
 
 // Start, Again and Practice the misses all come here, inside the tap, so that
-// focusing the answer box brings up a phone's keyboard.
+// focusing the answer box brings up a phone's keyboard. A multiple-choice
+// round puts the keyboard away instead.
 function startRound(order = null) {
   clearTimeout(onwardTimer);
   endCelebration(true);
   round = newRound(settings.quiz, settings.set, settings.length, order);
   masteredBefore = new Set(round.pool.filter(z => levelOf(progress, round.quiz, z) === 'mastered'));
   started = Date.now();
+  $('quiz').dataset.kind = typed() ? 'typed' : 'choice';
   ask();
-  focusAnswer();
+  if (typed()) focusAnswer();
+  else $('answer').blur();
 }
 
 function ask() {
@@ -588,7 +596,8 @@ function ask() {
     return;
   }
   setPhase('asking');
-  renderQuestion(z);
+  if (typed()) renderQuestion(z);
+  else renderChoice(z);
 }
 
 const question = () => round.asked[round.asked.length - 1];
@@ -598,6 +607,7 @@ function renderQuestion(z) {
   $('quiz').dataset.z = z;
   const tile = $('prompt-tile');
   tile.dataset.cat = element.cat;
+  tile.classList.remove('plain');
   if (round.quiz === 'name') {
     tile.innerHTML = tileHtml(element);
     $('prompt-text').innerHTML = '<span>What is this element called?</span>';
@@ -668,6 +678,86 @@ function renderFeedback(z, verdict, result) {
   $('btn-onward').hidden = false;
   $('btn-onward').textContent = roundOver(round) ? 'See how you did' : 'Next';
 }
+
+// A multiple-choice question: the prompt beside its tile, and four choices.
+// The tile stays plain wherever its colour would give the answer away.
+function renderChoice(z) {
+  choice = choiceQuestion(round.quiz, z, poolOf(round.quiz, round.size), random);
+  const element = byNumber(z);
+  const tile = $('prompt-tile');
+  $('quiz').dataset.z = z;
+  $('quiz').dataset.form = choice.form;
+  tile.dataset.cat = element.cat;
+  tile.classList.toggle('plain', choice.form !== 'value');
+  let subject;
+  let ask;
+  if (round.quiz === 'weight' && choice.form === 'value') {
+    tile.innerHTML = tileHtml(element);
+    [subject, ask] = [element.name, 'What is its atomic weight?'];
+  } else if (round.quiz === 'weight') {
+    tile.innerHTML = '<span class="num">?</span><span class="sym">?</span>';
+    [subject, ask] = [shortMass(element), 'Which element has this atomic weight?'];
+  } else if (choice.form === 'which') {
+    tile.innerHTML = tileHtml(element);
+    [subject, ask] = [element.name, 'Which series is it in?'];
+  } else {
+    tile.innerHTML = '<span class="num">?</span><span class="sym">?</span>';
+    tile.classList.remove('plain'); // the series' own colour: it's in the question
+    [subject, ask] = [categoryOf(element.cat).label, `Which of these is ${withArticle(categoryOf(element.cat).label)}?`];
+  }
+  $('prompt-text').innerHTML = `<b>${subject}</b><span>${ask}</span>`;
+  // Colours on the choices would give a series away.
+  const colours = round.quiz !== 'series';
+  $('choices').innerHTML = choice.options.map((option, i) => {
+    const face = option.sym
+      ? `<span class="tile${colours ? '' : ' plain'}" data-cat="${option.cat}"><span class="sym">${option.sym}</span></span><span>${option.label}</span>`
+      : `<span>${option.label}</span>`;
+    return `<button class="choice-btn" type="button" data-index="${i}"${option.z ? ` data-z="${option.z}"` : ''}` +
+      `${option.key ? ` data-key="${option.key}"` : ''}><kbd>${i + 1}</kbd>${face}</button>`;
+  }).join('');
+  const n = round.asked.length;
+  $('quiz-count').textContent = round.length ? `Question ${n} of ${round.length}` : `Question ${n}`;
+  renderScore();
+  $('feedback').textContent = '';
+  $('feedback').className = 'feedback';
+  $('btn-onward').hidden = true;
+}
+
+// A choice made: marked right or wrong, kept, and explained.
+function choose(index) {
+  if (phase !== 'asking' || !choice) return;
+  const z = question();
+  const element = byNumber(z);
+  const verdict = index === choice.answer ? 'right' : 'wrong';
+  record(progress, round.quiz, z, verdict);
+  saveProgress();
+  answerQuestion(round, verdict);
+  setPhase('feedback');
+  [...$('choices').children].forEach((button, i) => {
+    button.classList.toggle('right', i === choice.answer);
+    button.classList.toggle('wrong', i === index && verdict === 'wrong');
+    button.classList.toggle('faded', i !== choice.answer && i !== index);
+  });
+  const fact = round.quiz === 'weight'
+    ? `The atomic weight of ${element.name.toLowerCase()} is ${shortMass(element)}.`
+    : `${element.name} is ${withArticle(categoryOf(element.cat).label)}.`;
+  const explain = choice.form === 'which' ? '' : `<span class="explain">${choice.explain}</span>`;
+  $('feedback').innerHTML = `${verdict === 'right' ? '✓ Right. ' : '✗ '}${fact}${explain}`;
+  $('feedback').className = `feedback ${verdict}`;
+  $('prompt-tile').classList.remove('plain');
+  $('prompt-tile').dataset.cat = element.cat;
+  $('prompt-tile').innerHTML = tileHtml(element);
+  renderScore();
+  playSound(verdict);
+  $('btn-onward').hidden = false;
+  $('btn-onward').textContent = roundOver(round) ? 'See how you did' : 'Next';
+  if (verdict === 'right') onwardTimer = setTimeout(onward, RIGHT_MS);
+}
+
+$('choices').addEventListener('click', event => {
+  const button = event.target.closest('[data-index]');
+  if (button) choose(Number(button.dataset.index));
+});
 
 function onward() {
   clearTimeout(onwardTimer);
@@ -778,7 +868,7 @@ $('btn-showme').addEventListener('click', () => {
 
 $('btn-onward').addEventListener('click', () => {
   onward();
-  if (phase === 'asking') focusAnswer();
+  if (phase === 'asking' && typed()) focusAnswer();
 });
 
 $('btn-end').addEventListener('click', endRound);
@@ -941,6 +1031,18 @@ document.addEventListener('keydown', event => {
     return;
   }
   if (!$('about').hidden || event.target.matches?.('input')) return;
+  // A multiple-choice question: 1 to 4 choose, Enter moves on.
+  if (view === 'quiz' && round && !typed()) {
+    if (phase === 'asking' && /^[1-4]$/.test(event.key)) {
+      choose(Number(event.key) - 1);
+      return;
+    }
+    if (phase === 'feedback' && event.key === 'Enter') {
+      event.preventDefault();
+      onward();
+      return;
+    }
+  }
   if (event.key.toLowerCase() === 'm') toggleSound();
   else if (event.key === '/' && view === 'explore') {
     event.preventDefault();

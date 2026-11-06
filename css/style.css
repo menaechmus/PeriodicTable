@@ -661,6 +661,15 @@ button {
   padding-inline: 6px;
 }
 
+/* Four quizzes in two rows of two. */
+.choice.quad {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-radius: 24px;
+}
+
+.explore[data-layout='side'] .toolbar .choice.quad { border-radius: 20px; }
+
 .mastery {
   display: grid;
   gap: 6px;
@@ -756,6 +765,81 @@ button {
 
 .quiz[data-phase='feedback'] .prompt-text,
 .quiz[data-phase='asking'] .feedback { display: none; }
+
+.feedback .explain {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Typed quizzes use the box, the others four choices. */
+.quiz[data-kind='choice'] .answer,
+.quiz[data-kind='choice'] #btn-showme,
+.quiz[data-kind='typed'] .choices { display: none; }
+
+.choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.choice-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 8px 10px;
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 1.1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* The key that picks it, for a keyboard. */
+.choice-btn kbd {
+  position: absolute;
+  top: 4px;
+  left: 7px;
+  color: var(--muted);
+  font: 600 0.7rem system-ui, sans-serif;
+}
+
+.choice-btn .tile {
+  --size: 34px;
+  flex: none;
+}
+
+.choice-btn .tile .sym {
+  margin: 0;
+  font-size: calc(var(--size) * 0.5);
+}
+
+.choice-btn.right {
+  border-color: var(--right);
+  background: rgba(159, 227, 155, 0.18);
+}
+
+.choice-btn.wrong {
+  border-color: var(--warn);
+  background: rgba(255, 180, 163, 0.16);
+}
+
+.choice-btn.faded { opacity: 0.45; }
+
+/* A tile whose colour would give the answer away. */
+.tile.plain { --cat: #c9d1db; }
+
+@media (max-height: 600px) {
+  .choice-btn { min-height: 52px; font-size: 1rem; }
+}
 
 /* A short screen: a smaller prompt keeps the answer box in the top half. */
 @media (max-height: 600px) {
