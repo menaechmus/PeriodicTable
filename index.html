@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b1626">
-<meta name="description" content="An interactive periodic table: tap any element, or slide a finger across the table, to see each element's details.">
+<meta name="description" content="An interactive periodic table: tap any element, or slide a finger across the table, to see its details, then learn the names and symbols with a quiz that keeps track of what you know.">
 <title>Periodic Table</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23f6c955%22/><text x=%2250%22 y=%2268%22 text-anchor=%22middle%22 font-family=%22Georgia,serif%22 font-size=%2252%22 font-weight=%22700%22 fill=%22%232b2205%22>Au</text></svg>">
 <link rel="stylesheet" href="css/style.css">
@@ -13,6 +13,18 @@
 <div class="app">
   <header id="topbar" class="topbar">
     <h1 class="brand"><span class="brand-tile" aria-hidden="true"><small>79</small>Au</span><span class="brand-text">Periodic Table</span></h1>
+    <nav id="tabs" class="tabs choice" aria-label="Pages">
+      <button data-view="explore" aria-pressed="true">Table</button>
+      <button data-view="quiz" aria-pressed="false">Quiz</button>
+      <button data-view="progress" aria-pressed="false">Progress</button>
+    </nav>
+    <button id="btn-sound" class="icon-btn" aria-label="Sound" aria-pressed="true">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 9v6h4l5 4V5L8 9z"/>
+        <path class="line on" d="M16.5 9a4.5 4.5 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/>
+        <path class="line off" d="M17 9.5l5 5M22 9.5l-5 5"/>
+      </svg>
+    </button>
     <button id="btn-about" class="icon-btn" aria-label="About">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle class="line" cx="12" cy="12" r="9"/>
@@ -36,6 +48,86 @@
     </div>
     <div id="legend" class="legend" role="group" aria-label="Key: tap one to pick out those elements"></div>
     <p id="hint" class="hint muted" role="status" aria-live="polite"></p>
+  </main>
+
+  <main id="quiz" class="screen quiz" data-phase="setup" hidden>
+    <section id="quiz-setup" class="quiz-setup">
+      <div class="option stacked">
+        <h2 class="label">Quiz</h2>
+        <div class="choice" data-setting="quiz" role="group" aria-label="Quiz">
+          <button data-value="name">Symbol → name</button>
+          <button data-value="symbol">Name → symbol</button>
+        </div>
+      </div>
+      <div class="option stacked">
+        <h2 class="label">Elements</h2>
+        <div class="choice" data-setting="set" role="group" aria-label="Elements">
+          <button data-value="20">1–20</button>
+          <button data-value="36">1–36</button>
+          <button data-value="54">1–54</button>
+          <button data-value="86">1–86</button>
+          <button data-value="118">All</button>
+        </div>
+      </div>
+      <div class="option stacked">
+        <h2 class="label">Questions</h2>
+        <div class="choice" data-setting="length" role="group" aria-label="Questions">
+          <button data-value="10">10</button>
+          <button data-value="20">20</button>
+          <button data-value="0">Keep going</button>
+        </div>
+      </div>
+      <div id="setup-mastery" class="mastery"></div>
+      <button id="btn-start" class="btn primary">Start</button>
+    </section>
+
+    <section id="quiz-ask" class="quiz-ask" hidden>
+      <div class="quiz-bar">
+        <span id="quiz-count" class="quiz-count"></span>
+        <span id="quiz-score" class="quiz-score"></span>
+        <button id="btn-end" class="btn small">End</button>
+      </div>
+      <div class="prompt">
+        <div id="prompt-tile" class="tile"></div>
+        <p id="prompt-text" class="prompt-text"></p>
+        <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+      </div>
+      <form id="answer-form" class="answer">
+        <input id="answer" class="answer-input" type="text" aria-label="Your answer" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+        <button id="btn-check" class="btn primary" type="submit">Check</button>
+      </form>
+      <div class="quiz-actions">
+        <button id="btn-showme" class="btn" type="button">Show me</button>
+        <button id="btn-onward" class="btn primary" type="button" hidden>Next</button>
+      </div>
+    </section>
+
+    <section id="quiz-done" class="quiz-done" hidden>
+      <h2 id="done-title"></h2>
+      <p id="done-facts" class="muted"></p>
+      <div id="done-more" class="done-more"></div>
+      <div class="row">
+        <button id="btn-again" class="btn primary">Again</button>
+        <button id="btn-practice" class="btn">Practice the misses</button>
+      </div>
+      <button id="btn-change" class="btn">Change quiz</button>
+    </section>
+  </main>
+
+  <main id="progress" class="screen explore" data-layout="stack" hidden>
+    <div id="progress-tools" class="toolbar">
+      <div class="choice" data-setting="shows" role="group" aria-label="Progress for">
+        <button data-value="name">Symbol → name</button>
+        <button data-value="symbol">Name → symbol</button>
+      </div>
+    </div>
+    <section class="progress-more">
+      <h3>Each set</h3>
+      <table id="progress-sets" class="grid"></table>
+      <h3>Recent rounds</h3>
+      <ol id="progress-rounds" class="rounds"></ol>
+      <button id="btn-reset" class="btn danger">Reset progress</button>
+    </section>
   </main>
 </div>
 
@@ -69,6 +161,8 @@
     <button class="btn primary" data-close>Close</button>
   </div>
 </div>
+
+<canvas id="party" width="0" height="0" aria-hidden="true"></canvas>
 
 <script type="module" src="js/ui.js"></script>
 </body>

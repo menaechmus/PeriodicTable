@@ -31,6 +31,12 @@
   --liquid: #6fc3f0;
   --gas: #ffb0c4;
   --unknown: #8a97a8;
+  /* How well you know an element */
+  --new: #8a97a8;
+  --learning: #ffb366;
+  --almost: #e3e36b;
+  --mastered: #6fd08c;
+  --right: #9fe39b;
 }
 
 * { box-sizing: border-box; }
@@ -88,10 +94,33 @@ button {
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-height: 44px;
 }
+
+/* The three pages. On a narrow phone they take a row of their own. */
+.tabs {
+  order: 3;
+  flex: 1 1 100%;
+}
+
+.tabs button { flex: 1; }
+
+@media (min-width: 560px) {
+  .tabs {
+    order: 0;
+    flex: 0 1 auto;
+  }
+
+  .tabs button { flex: none; }
+}
+
+/* The speaker shows sound waves when on and a cross when muted. */
+#btn-sound[aria-pressed='true'] .off,
+#btn-sound[aria-pressed='false'] .on { display: none; }
+#btn-sound[aria-pressed='false'] { color: var(--muted); }
 
 .brand {
   display: flex;
@@ -283,10 +312,23 @@ button {
 [data-state='gas'] { --st: var(--gas); }
 [data-state='unknown'] { --st: var(--unknown); }
 
+[data-level='new'] { --lvl: var(--new); }
+[data-level='learning'] { --lvl: var(--learning); }
+[data-level='almost'] { --lvl: var(--almost); }
+[data-level='mastered'] { --lvl: var(--mastered); }
+
 .ptable[data-color='category'] .cell { --fill: var(--cat); }
 .ptable[data-color='block'] .cell { --fill: var(--blk); }
 .ptable[data-color='state'] .cell { --fill: var(--st); }
-.ptable[data-color='state'] .cell.ref { --fill: rgba(255, 255, 255, 0.14); color: var(--muted); }
+.ptable[data-color='progress'] .cell { --fill: var(--lvl); }
+
+/* Spots that aren't elements, or that a quiz doesn't ask about. */
+.ptable[data-color='state'] .cell.ref,
+.ptable[data-color='progress'] .cell.ref,
+.ptable[data-color='progress'] .cell[data-level='none'] {
+  --fill: rgba(255, 255, 255, 0.14);
+  color: var(--muted);
+}
 
 .cell {
   position: relative;
@@ -554,7 +596,16 @@ button {
 .explore[data-layout='side'] .hint { grid-area: hint; }
 
 .explore[data-layout='side'] .toolbar .choice { width: 100%; }
-.explore[data-layout='side'] .toolbar .choice button { flex: 1; min-height: 34px; padding: 4px 6px; font-size: 0.85rem; }
+
+/* "Symbol → name" may take two lines in the narrow column. */
+.explore[data-layout='side'] .toolbar .choice button {
+  flex: 1;
+  min-height: 34px;
+  padding: 4px 6px;
+  font-size: 0.85rem;
+  line-height: 1.15;
+  white-space: normal;
+}
 .explore[data-layout='side'] .find { flex-basis: 100%; min-height: 36px; }
 
 .explore[data-layout='side'] .chip {
@@ -570,8 +621,259 @@ button {
 }
 
 @media (max-width: 359px) {
+  .brand-text { display: none; }
   .choice button { padding-inline: 10px; }
   .chip { min-height: 30px; padding-inline: 5px 9px; font-size: 0.78rem; }
+}
+
+/* The quiz */
+
+.quiz {
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.quiz-setup,
+.quiz-ask,
+.quiz-done {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.option.stacked {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.option.stacked .choice button {
+  flex: 1;
+  padding-inline: 6px;
+}
+
+.mastery {
+  display: grid;
+  gap: 6px;
+}
+
+/* Mastered, almost, learning and new, side by side. */
+.bar {
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.bar i { background: var(--fill); }
+
+.btn.small {
+  min-height: 38px;
+  padding: 4px 14px;
+}
+
+.quiz-ask { gap: 14px; }
+
+.quiz-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quiz-count { font-weight: 600; }
+
+.quiz-score {
+  flex: 1;
+  color: var(--muted);
+}
+
+.prompt {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 96px;
+}
+
+.prompt .tile { --size: 92px; }
+
+.prompt-text {
+  display: grid;
+  gap: 2px;
+  color: var(--muted);
+}
+
+.prompt-text b {
+  color: var(--ink);
+  font: 700 1.7rem Georgia, 'Times New Roman', serif;
+  overflow-wrap: anywhere;
+}
+
+.answer {
+  display: flex;
+  gap: 8px;
+}
+
+/* 20px text: smaller would make an iPhone zoom in on it. No width of its
+   own (a text box asks for about twenty letters), so it never pushes the
+   Check button off a narrow phone. */
+.answer-input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.25rem;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.answer-input::placeholder { color: var(--muted); }
+
+.quiz[data-phase='feedback'] .answer-input { opacity: 0.6; }
+
+/* The verdict takes the question's place beside the tile, so it shows above
+   a phone's keyboard. */
+.feedback {
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.quiz[data-phase='feedback'] .prompt-text,
+.quiz[data-phase='asking'] .feedback { display: none; }
+
+/* A short screen: a smaller prompt keeps the answer box in the top half. */
+@media (max-height: 600px) {
+  .quiz-ask { gap: 10px; }
+  .prompt { min-height: 68px; gap: 12px; }
+  .prompt .tile { --size: 64px; }
+  .prompt-text b { font-size: 1.35rem; }
+  .feedback { font-size: 0.95rem; }
+}
+
+.feedback.right { color: var(--right); }
+.feedback.slip { color: var(--gold); }
+.feedback.wrong { color: var(--warn); }
+
+.quiz-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.quiz-actions .btn { flex: 1; }
+
+.quiz-done h2 { font: 700 2rem Georgia, 'Times New Roman', serif; }
+
+.done-more {
+  display: grid;
+  gap: 12px;
+}
+
+.done-more p { line-height: 1.45; }
+
+/* Missed elements: tiles that open their details. */
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tiles .tile {
+  --size: 54px;
+  padding: 0;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Progress */
+
+.progress-more {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  max-width: 640px;
+  margin-top: 8px;
+}
+
+.progress-more h3,
+.quiz-done h3 {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid th,
+.grid td {
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  text-align: right;
+}
+
+.grid th:first-child { text-align: left; }
+
+.grid thead th {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.rounds {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.rounds li {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.rounds li span:first-child {
+  flex: none;
+  min-width: 7.5em;
+  color: var(--muted);
+}
+
+.rounds li span:nth-child(2) { flex: 1; }
+
+#btn-reset { justify-self: start; }
+
+/* Fireworks and confetti over everything, never in the way of a tap. */
+#party {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 /* Overlays */

@@ -18,6 +18,14 @@ import {
   CATEGORIES, PLACEHOLDERS, PREVIEW_AREA, placeOf, neighbour, shellsOf, findElements, temperature, density,
   configHtml, hasStandardWeight, byNumber, minus, yearText, stateOf,
 } from './js/table.js';
+import { checkAnswer, normalize, distance, SLIP_FROM } from './js/answers.js';
+import {
+  emptyProgress, loadProgress, record, levelOf, recordOf, pickNext, summarize, allMastered, addRound,
+  MAX_ROUNDS, WEIGHTS,
+} from './js/progress.js';
+import { SETS, poolOf, newRound, nextQuestion, answerQuestion, roundOver, scoreOf, seeded, shuffled } from './js/quiz.js';
+import { SOUNDS, renderSound } from './js/sound.js';
+import { createShow, advance, isOver } from './js/celebrate.js';
 
 const results = [];
 const notes = [];
@@ -253,6 +261,262 @@ test('find: other spellings and numbers', () => {
   equal(findElements('sulph'), [16], 'sulphur');
   equal(findElements('79'), [79], '79');
   equal([findElements('0'), findElements('119'), findElements('xyz'), findElements('')], [[], [], [], []], 'none');
+});
+
+// ---- Answers --------------------------------------------------------------------
+
+const verdict = (z, kind, typed) => checkAnswer(z, kind, typed).verdict;
+
+test('answers: names, whatever the capitals, spaces and full stops', () => {
+  equal([verdict(26, 'name', 'Iron'), verdict(26, 'name', ' IRON '), verdict(26, 'name', 'iron.')], ['right', 'right', 'right']);
+  equal(verdict(1, 'name', 'Hydro gen'), 'right', 'a space inside');
+  equal(normalize('Caesium‐ ’.'), 'caesium', 'normalize');
+});
+
+test('answers: both spellings where English has two', () => {
+  equal([verdict(13, 'name', 'aluminium'), verdict(13, 'name', 'Aluminum')], ['right', 'right'], 'Al');
+  equal([verdict(16, 'name', 'sulphur'), verdict(16, 'name', 'sulfur')], ['right', 'right'], 'S');
+  equal([verdict(55, 'name', 'Caesium'), verdict(55, 'name', 'cesium')], ['right', 'right'], 'Cs');
+});
+
+test('answers: one slip forgiven in a long name, but not learned', () => {
+  equal(verdict(42, 'name', 'Molybdenun'), 'slip', 'a letter wrong');
+  equal(verdict(42, 'name', 'Molybednum'), 'slip', 'two swapped');
+  equal(verdict(59, 'name', 'Praseodymum'), 'slip', 'a letter missing');
+  equal(verdict(24, 'name', 'Chroomium'), 'slip', 'a letter extra');
+  equal(verdict(13, 'name', 'Aluminiun'), 'slip', 'in the other spelling');
+  equal(verdict(42, 'name', 'Molybedun'), 'wrong', 'two slips');
+});
+
+test(`answers: the slip only from ${SLIP_FROM} letters`, () => {
+  equal(verdict(11, 'name', 'Sodum'), 'slip', 'Sodium, 6 letters');
+  equal(verdict(18, 'name', 'Argom'), 'wrong', 'Argon, 5 letters');
+  equal(verdict(26, 'name', 'Iorn'), 'wrong', 'Iron, 4 letters');
+});
+
+test('answers: another element\'s name is wrong, and says which', () => {
+  equal(checkAnswer(58, 'name', 'Cesium'), { verdict: 'wrong', named: 55 }, 'Cesium for cerium');
+  equal(checkAnswer(68, 'name', 'Terbium'), { verdict: 'wrong', named: 65 }, 'Terbium for erbium');
+  equal(checkAnswer(96, 'name', 'Cerium'), { verdict: 'wrong', named: 58 }, 'Cerium for curium');
+  equal(checkAnswer(29, 'name', 'co'), { verdict: 'wrong', named: 27 }, 'a symbol for a name');
+  equal(checkAnswer(26, 'name', 'Fe'), { verdict: 'wrong', named: 26 }, 'its own symbol');
+});
+
+test('answers: symbols exactly, apart from capitals', () => {
+  equal([verdict(26, 'symbol', 'Fe'), verdict(26, 'symbol', 'fe'), verdict(26, 'symbol', 'FE ')], ['right', 'right', 'right']);
+  equal(checkAnswer(29, 'symbol', 'Co'), { verdict: 'wrong', named: 27 }, 'Co for copper');
+  equal(checkAnswer(26, 'symbol', 'iron'), { verdict: 'wrong', named: 26 }, 'its name for its symbol');
+  equal(checkAnswer(26, 'symbol', 'Fx'), { verdict: 'wrong', named: null }, 'no such symbol');
+  equal(verdict(74, 'symbol', 'w'), 'right', 'W');
+});
+
+test('answers: nothing typed is not an answer', () => {
+  equal([verdict(1, 'name', ''), verdict(1, 'symbol', '   ')], ['empty', 'empty']);
+});
+
+test('answers: edit distance', () => {
+  equal([distance('abc', 'abc'), distance('abc', 'acb'), distance('abc', 'ab'), distance('kitten', 'sitting')], [0, 1, 1, 3]);
+});
+
+// ---- Progress -------------------------------------------------------------------
+
+test('progress: right from new goes to 2, then up to Mastered at 4', () => {
+  const progress = emptyProgress();
+  equal(levelOf(progress, 'name', 26), 'new', 'new');
+  equal(record(progress, 'name', 26, 'right'), { before: 0, after: 2 }, 'first');
+  equal(levelOf(progress, 'name', 26), 'learning', 'learning');
+  record(progress, 'name', 26, 'right');
+  equal(levelOf(progress, 'name', 26), 'almost', 'almost');
+  record(progress, 'name', 26, 'right');
+  equal(levelOf(progress, 'name', 26), 'mastered', 'mastered');
+  record(progress, 'name', 26, 'right');
+  record(progress, 'name', 26, 'right');
+  equal(recordOf(progress, 'name', 26), { step: 5, right: 5, wrong: 0, slips: 0, level: 'mastered' }, 'capped at 5');
+});
+
+test('progress: wrong drops two steps, never below 1', () => {
+  const progress = emptyProgress();
+  equal(record(progress, 'name', 8, 'wrong'), { before: 0, after: 1 }, 'new');
+  record(progress, 'name', 8, 'right');
+  record(progress, 'name', 8, 'right');
+  record(progress, 'name', 8, 'right');
+  equal(record(progress, 'name', 8, 'wrong'), { before: 4, after: 2 }, 'from mastered');
+  equal(record(progress, 'name', 8, 'wrong'), { before: 2, after: 1 }, 'to 1');
+});
+
+test('progress: a slip scores but moves nothing up', () => {
+  const progress = emptyProgress();
+  equal(record(progress, 'name', 42, 'slip'), { before: 0, after: 1 }, 'new becomes learning');
+  record(progress, 'name', 42, 'right');
+  equal(record(progress, 'name', 42, 'slip'), { before: 2, after: 2 }, 'no change');
+  equal(recordOf(progress, 'name', 42).slips, 2, 'counted');
+});
+
+test('progress: each quiz keeps its own record', () => {
+  const progress = emptyProgress();
+  record(progress, 'name', 1, 'right');
+  equal([levelOf(progress, 'name', 1), levelOf(progress, 'symbol', 1)], ['learning', 'new']);
+});
+
+test('progress: the next pick leaves out the last three', () => {
+  const progress = emptyProgress();
+  const random = seeded(3);
+  for (let i = 0; i < 200; i++) equal(pickNext(progress, 'name', [1, 2, 3, 4], [9, 1, 2, 3], random), 4, `pick ${i}`);
+  equal(pickNext(progress, 'name', [7], [7], random), 7, 'a pool of one');
+  equal(pickNext(progress, 'name', [1, 2], [1], random), 2, 'a pool of two');
+});
+
+test('progress: picks lean towards what is being learned', () => {
+  const progress = emptyProgress();
+  for (let i = 0; i < 4; i++) record(progress, 'name', 1, 'right'); // step 5
+  record(progress, 'name', 2, 'wrong'); // step 1
+  const random = seeded(11);
+  const counts = { 1: 0, 2: 0, 3: 0 };
+  for (let i = 0; i < 3000; i++) counts[pickNext(progress, 'name', [1, 2, 3], [], random)]++;
+  const share = z => counts[z] / 3000;
+  const total = WEIGHTS[5] + WEIGHTS[1] + WEIGHTS[0];
+  equal(Math.abs(share(1) - WEIGHTS[5] / total) < 0.03, true, `mastered ${share(1).toFixed(3)}`);
+  equal(Math.abs(share(2) - WEIGHTS[1] / total) < 0.03, true, `learning ${share(2).toFixed(3)}`);
+  equal(Math.abs(share(3) - WEIGHTS[0] / total) < 0.03, true, `new ${share(3).toFixed(3)}`);
+});
+
+test('progress: set summaries', () => {
+  const progress = emptyProgress();
+  for (let i = 0; i < 3; i++) record(progress, 'symbol', 1, 'right');
+  record(progress, 'symbol', 2, 'wrong');
+  equal(summarize(progress, 'symbol', [1, 2, 3, 4]), { new: 2, learning: 1, almost: 0, mastered: 1 });
+  equal([allMastered(progress, 'symbol', [1]), allMastered(progress, 'symbol', [1, 2])], [true, false]);
+});
+
+test(`progress: the last ${MAX_ROUNDS} rounds are kept`, () => {
+  const progress = emptyProgress();
+  for (let i = 0; i < MAX_ROUNDS + 5; i++) addRound(progress, { at: '', quiz: 'name', size: 20, asked: 10, right: i, slips: 0, ms: 1 });
+  equal(progress.rounds.length, MAX_ROUNDS, 'count');
+  equal(progress.rounds[0].right, 5, 'oldest kept');
+});
+
+test('progress: a save survives a reload', () => {
+  const progress = emptyProgress();
+  record(progress, 'name', 26, 'right');
+  record(progress, 'symbol', 79, 'slip');
+  addRound(progress, { at: '2026-11-05T12:00:00.000Z', quiz: 'name', size: 20, asked: 10, right: 9, slips: 1, ms: 61000 });
+  progress.celebrated['name:20'] = true;
+  equal(loadProgress(JSON.parse(JSON.stringify(progress))), progress);
+});
+
+test('progress: damaged saves fall back to zero', () => {
+  equal(loadProgress(null), emptyProgress(), 'nothing');
+  equal(loadProgress('junk'), emptyProgress(), 'a string');
+  const loaded = loadProgress({
+    asked: -4,
+    items: { name: { 26: [9, 3, 'x', -1, 2], 0: [1, 1, 0, 0, 0], 200: [1, 1, 0, 0, 0], abc: [1, 1, 0, 0, 0], 5: 'no', 6: [0, 0, 0, 0, 0] }, symbol: [] },
+    rounds: [{ at: 7, quiz: 'name', size: '20', asked: 10, right: 8 }, 'junk'],
+    celebrated: { 'name:20': true, 'x y': true, 'symbol:36': 'yes' },
+  });
+  equal(loaded.asked, 0, 'asked');
+  equal(loaded.items.name, { 26: [5, 3, 0, 0, 0] }, 'items');
+  equal(loaded.items.symbol, {}, 'symbol');
+  equal(loaded.rounds, [{ at: '', quiz: 'name', size: 0, asked: 10, right: 8, slips: 0, ms: 0 }], 'rounds');
+  equal(loaded.celebrated, { 'name:20': true }, 'celebrated');
+});
+
+// ---- Rounds ---------------------------------------------------------------------
+
+test('quiz: the elements each set and quiz draws on', () => {
+  equal(SETS, [20, 36, 54, 86, 118], 'sets');
+  equal(poolOf('name', 20), Array.from({ length: 20 }, (_, i) => i + 1), 'name, 1-20');
+  equal(poolOf('symbol', 118).length, 118, 'symbol, all');
+  equal(poolOf('weight', 118).length, 84, 'weight: standard weights only');
+  equal(poolOf('series', 118).length, 108, 'series: not 109 onward');
+});
+
+test('quiz: a round of 10 asks 10, then ends', () => {
+  const progress = emptyProgress();
+  const round = newRound('name', 20, 10);
+  const random = seeded(5);
+  for (let i = 0; i < 10; i++) {
+    const z = nextQuestion(round, progress, random);
+    equal(z >= 1 && z <= 20, true, `question ${i}: ${z}`);
+    record(progress, 'name', z, i === 3 ? 'wrong' : i === 5 ? 'slip' : 'right');
+    answerQuestion(round, i === 3 ? 'wrong' : i === 5 ? 'slip' : 'right');
+  }
+  equal(roundOver(round), true, 'over');
+  equal(nextQuestion(round, progress, random), null, 'no more');
+  const score = scoreOf(round);
+  equal([score.asked, score.right, score.slips, score.wrong, score.best], [10, 9, 1, 1, 6], 'score');
+  equal(score.missed, [round.answers[3].z], 'missed');
+});
+
+test('quiz: never the same element twice running', () => {
+  const progress = emptyProgress();
+  const round = newRound('symbol', 20, 0);
+  const random = seeded(9);
+  let last = null;
+  for (let i = 0; i < 300; i++) {
+    const z = nextQuestion(round, progress, random);
+    if (z === last) throw new Error(`asked ${z} twice running`);
+    answerQuestion(round, 'right');
+    last = z;
+  }
+  equal(roundOver(round), false, 'keep going never ends');
+});
+
+test('quiz: a round of the misses asks just those, in order', () => {
+  const round = newRound('name', 20, 10, [8, 3, 15]);
+  const progress = emptyProgress();
+  const asked = [];
+  for (let z = nextQuestion(round, progress); z !== null; z = nextQuestion(round, progress)) {
+    asked.push(z);
+    answerQuestion(round, 'right');
+  }
+  equal(asked, [8, 3, 15]);
+});
+
+test('quiz: the same seed asks the same questions', () => {
+  const play = () => {
+    const progress = emptyProgress();
+    const round = newRound('name', 36, 20);
+    const random = seeded(42);
+    const asked = [];
+    for (let z = nextQuestion(round, progress, random); z !== null; z = nextQuestion(round, progress, random)) {
+      asked.push(z);
+      record(progress, 'name', z, z % 3 ? 'right' : 'wrong');
+      answerQuestion(round, 'right');
+    }
+    return asked;
+  };
+  equal(play(), play());
+  equal(shuffled([1, 2, 3, 4, 5], seeded(1)).sort(), [1, 2, 3, 4, 5], 'shuffled keeps them all');
+});
+
+// ---- Sound and celebration --------------------------------------------------------
+
+await testAsync('sound: every effect makes a sound of a sensible length', async () => {
+  const seconds = { right: 0.8, slip: 0.6, wrong: 0.8, finish: 1, win: 6, firework: 1 };
+  equal([...SOUNDS].sort(), Object.keys(seconds).sort(), 'the list');
+  for (const name of SOUNDS) {
+    const context = new OfflineAudioContext(1, Math.ceil(44100 * seconds[name]), 44100);
+    renderSound(name, context, 0.01);
+    const samples = (await context.startRendering()).getChannelData(0);
+    let peak = 0;
+    for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
+    let tail = 0;
+    for (let i = Math.floor(samples.length * 0.95); i < samples.length; i++) tail = Math.max(tail, Math.abs(samples[i]));
+    equal(peak > 0.01, true, `${name} is heard, peak ${peak}`);
+    equal(peak <= 1.5, true, `${name} is not too loud, peak ${peak}`);
+    if (name !== 'win') equal(tail < 0.01, true, `${name} has ended by ${seconds[name]} s, tail ${tail}`);
+  }
+});
+
+test('celebration: the show runs and ends by itself', () => {
+  const show = createShow(390, 844, seeded(17));
+  let elapsed = 0;
+  while (!isOver(show) && elapsed < 10) {
+    advance(show, 0.033);
+    elapsed += 0.033;
+  }
+  equal(isOver(show), true, 'over');
+  equal(elapsed > 2 && elapsed <= 6, true, `after ${elapsed.toFixed(1)} s`);
 });
 
 const failed = results.filter(result => !result.ok);
